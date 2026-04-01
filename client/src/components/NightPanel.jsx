@@ -256,7 +256,7 @@ export default function NightPanel({
             {myRole !== "human" && !submitted && (
                 <div style={{
                     flexShrink: 0, borderTop: "1px solid #1a0a2a", padding: "14px 16px",
-                    background: "#07000f"
+                    background: "#07000f", display: "flex", flexDirection: "column", gap: 10
                 }}>
                     {actionError && (
                         <div style={{ fontSize: 8, color: "#ff2a2a", marginBottom: 8 }}>⚠ {actionError}</div>
@@ -267,10 +267,19 @@ export default function NightPanel({
                             width: "100%", fontSize: 10, borderColor: selectedTarget ? color : undefined,
                             color: selectedTarget ? color : undefined
                         }}
-                        onClick={onConfirm} disabled={!selectedTarget}>
+                        onClick={() => onConfirm()} disabled={!selectedTarget}>
                         {!selectedTarget ? "SELECT A TARGET"
                             : `${meta.actionLabel}: ${players.find(p => p.id === selectedTarget)?.username || "..."}`}
                     </button>
+                    {myRole === "gnosia" && (
+                        <button
+                            className="btn btn-secondary"
+                            style={{ width: "100%", fontSize: 9 }}
+                            onClick={() => onConfirm("skip")}
+                        >
+                            SKIP KILL
+                        </button>
+                    )}
                 </div>
             )}
         </div>

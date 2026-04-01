@@ -310,8 +310,10 @@ io.on("connection", (socket) => {
             case "gnosia_vote": {
                 if (actor.role !== "gnosia") return cb({ success: false, error: "Not authorized." });
                 if (nightActions.gnosiaVotes[socket.id]) return cb({ success: false, error: "Action already submitted." });
-                const target = players.find(p => p.id === targetId && p.alive && p.id !== socket.id);
-                if (!target) return cb({ success: false, error: "Invalid target." });
+                if (targetId !== "skip") {
+                    const target = players.find(p => p.id === targetId && p.alive && p.id !== socket.id);
+                    if (!target) return cb({ success: false, error: "Invalid target." });
+                }
                 nightActions.gnosiaVotes[socket.id] = targetId;
                 const gCount = players.filter(p => p.alive && p.role === "gnosia").length;
                 const vIn = Object.keys(nightActions.gnosiaVotes).length;

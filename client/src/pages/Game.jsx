@@ -348,11 +348,13 @@ export default function Game({ session, socket, onLeaveRoom }) {
             else { setActionMsg("Vote cast."); setSelectedTarget(null); }
         });
     }
-    function submitNightAction() {
-        if (!selectedTarget || nightSubmitted) return;
+    function submitNightAction(skipArg) {
+        if (nightSubmitted) return;
+        const target = skipArg === "skip" ? "skip" : selectedTarget;
+        if (!target) return;
         const map = { gnosia: "gnosia_vote", engineer: "engineer", doctor: "doctor", guardian: "guardian" };
         const actionType = map[myRole]; if (!actionType) return;
-        socket.emit("night:action", { roomId, actionType, targetId: selectedTarget }, res => {
+        socket.emit("night:action", { roomId, actionType, targetId: target }, res => {
             if (!res.success) { setActionError(res.error); setTimeout(() => setActionError(""), 3000); }
             else setNightSubmitted(true);
         });
@@ -808,7 +810,7 @@ export default function Game({ session, socket, onLeaveRoom }) {
                                                 const p = players.find(x => x.id === voterId);
                                                 if (!p) return null;
                                                 return (
-                                                    <img key={voterId} src={`http://localhost:3001/profiles/${p.profileId}.jpg`} alt={p.username}
+                                                    <img key={voterId} src={`${SERVER}/profiles/${p.profileId}.jpg`} alt={p.username}
                                                         title={`${p.username} wants to skip`}
                                                         style={{ width: 26, height: 26, borderRadius: "50%", border: "1px solid #00f5ff55", objectFit: "cover" }}
                                                         onError={(e) => { e.target.style.display="none"; }}
