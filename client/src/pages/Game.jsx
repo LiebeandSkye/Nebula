@@ -8,6 +8,7 @@ import ChatPanel from "../components/ChatPanel.jsx";
 import PhaseOverlay from "../components/PhaseOverlay.jsx";
 import NightPanel from "../components/NightPanel.jsx";
 import StartReveal from "../components/StartReveal.jsx";
+import { clearPlaySession } from "../lib/sessionPersistence.js";
 
 const SERVER = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 const AVATAR_COLORS = {
@@ -363,10 +364,23 @@ export default function Game({ session, socket, onLeaveRoom }) {
         });
     }
 
+    function requestSkipPhase() {
+        socket.emit("phase:skip", { roomId }, (res) => {
+            if (!res?.success) {
+                setActionError(res?.error || "Failed to request skip.");
+                setTimeout(() => setActionError(""), 3000);
+                return;
+            }
+            setActionMsg("Skip requested.");
+            setTimeout(() => setActionMsg(""), 2000);
+        });
+    }
+
     function leaveRoom() {
         if (!window.confirm("Are you sure you want to leave the room? You can only leave during the lobby.")) return;
         socket.emit("room:leave", { roomId }, res => {
             if (res.success) {
+                clearPlaySession();
                 onLeaveRoom?.();
             } else {
                 alert(res.error || "Failed to leave room.");
@@ -803,6 +817,8 @@ export default function Game({ session, socket, onLeaveRoom }) {
                                     padding: "14px 16px", background: "#07000f",
                                     display: "flex", flexDirection: "column", gap: 10,
                                 }}>
+                                    {actionError && <div style={{ fontSize: 8, color: "#ff2a2a" }}>âš  {actionError}</div>}
+                                    {actionMsg && <div style={{ fontSize: 8, color: "#00f5ff" }}>{actionMsg}</div>}
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 12, flexWrap: "wrap" }}>
                                         {/* iVoted: check by ID in the rich voter array */}
                                         {(() => {
@@ -810,7 +826,7 @@ export default function Game({ session, socket, onLeaveRoom }) {
                                             return (
                                                 <button className="btn btn-secondary" style={{ fontSize: 9, flexShrink: 0 }}
                                                     onClick={() => {
-                                                        if (!iVoted) socket.emit("phase:skip", { roomId });
+                                                        if (!iVoted) requestSkipPhase();
                                                     }}
                                                     disabled={iVoted}>
                                                     {iVoted ? "✓ SKIP REQUESTED" : "⏭ SKIP PHASE"}

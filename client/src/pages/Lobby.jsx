@@ -3,7 +3,7 @@
  */
 import { useState, useEffect } from "react";
 import { useSocket, useSocketEvent } from "../hooks/useSocket";
-import { getOrCreateSessionToken, savePlaySession } from "../lib/sessionPersistence.js";
+import { clearPlaySession, getOrCreateSessionToken, savePlaySession } from "../lib/sessionPersistence.js";
 
 const SERVER = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
@@ -379,7 +379,12 @@ export default function Lobby({ onReady, resumeFrom }) {
                         }}
                             onClick={() => {
                                 if (window.confirm("Leave the room?")) {
-                                    emit("room:leave", { roomId }).then(() => {
+                                    emit("room:leave", { roomId }).then((res) => {
+                                        if (!res?.success) {
+                                            setError(res?.error || "Failed to leave room.");
+                                            return;
+                                        }
+                                        clearPlaySession();
                                         setRoomId(null);
                                         setMyId(null);
                                         setLobbyState(null);

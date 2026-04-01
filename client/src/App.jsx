@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSocket, useSocketEvent } from "./hooks/useSocket";
 import Lobby from "./pages/Lobby.jsx";
 import Game from "./pages/Game.jsx";
-import { loadPlaySession } from "./lib/sessionPersistence.js";
+import { clearPlaySession, loadPlaySession } from "./lib/sessionPersistence.js";
 
 const SERVER = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 const ROLE_COLORS = {
@@ -146,7 +146,24 @@ export default function App() {
             password: stored.password,
         }, (res) => {
             setResumeBusy(false);
-            if (!res?.success) return;
+            if (!res?.success) {
+                clearPlaySession();
+                setLobbyResume(null);
+                setRoleData(null);
+                setSession({
+                    roomId: null,
+                    myId: null,
+                    myRole: null,
+                    myProfileId: null,
+                    allies: [],
+                    phase: null,
+                    gnosiaCount: null,
+                    lastPhasePayload: null,
+                    sessionToken: null,
+                });
+                setScreen("lobby");
+                return;
+            }
 
             setSession(s => ({
                 ...s,

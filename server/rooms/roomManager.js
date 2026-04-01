@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require("uuid");
 const { createGameState, createPlayer } = require("../game/gameState");
 const { isValidProfileId, getProfileById } = require("../data/profiles");
 const stateMachine = require("../game/stateMachine");
+const nightResolver = require("../game/nightResolver");
 
 const rooms = new Map();
 const MAX_PLAYERS = 12;
@@ -70,6 +71,19 @@ function migrateSocketId(gs, oldId, newId) {
         if (gs.votes[k] === oldId) gs.votes[k] = newId;
     }
 
+    if (gs.skipVotes[oldId] !== undefined) {
+        gs.skipVotes[newId] = gs.skipVotes[oldId];
+        delete gs.skipVotes[oldId];
+    }
+
+    if (gs.nominations[oldId] !== undefined) {
+        gs.nominations[newId] = gs.nominations[oldId];
+        delete gs.nominations[oldId];
+    }
+    for (const k of Object.keys(gs.nominations)) {
+        if (gs.nominations[k] === oldId) gs.nominations[k] = newId;
+    }
+
     const gv = gs.nightActions.gnosiaVotes;
     if (gv[oldId] !== undefined) {
         gv[newId] = gv[oldId];
@@ -87,6 +101,12 @@ function migrateSocketId(gs, oldId, newId) {
     const mr = gs.morningReport;
     if (mr.killed === oldId) mr.killed = newId;
     if (mr.coldSleep === oldId) mr.coldSleep = newId;
+
+    for (const player of gs.players) {
+        if (player.voteTarget === oldId) {
+            player.voteTarget = newId;
+        }
+    }
 }
 
 function cancelDisconnectGrace(oldSocketId) {
@@ -117,7 +137,11 @@ function scheduleDisconnectRemoval(io, oldSocketId, roomId) {
     cancelDisconnectGrace(oldSocketId);
     const timer = setTimeout(() => {
         disconnectGraceTimers.delete(oldSocketId);
-        finalizePermanentDisconnect(io, oldSocketId, roomId);
+        try {
+            finalizePermanentDisconnect(io, oldSocketId, roomId);
+        } catch (err) {
+            console.error(`[Room] Failed to finalize disconnect for ${oldSocketId} in ${roomId}`, err);
+        }
     }, DISCONNECT_GRACE_MS);
     disconnectGraceTimers.set(oldSocketId, timer);
 }
@@ -137,7 +161,10 @@ function finalizePermanentDisconnect(io, oldSocketId, roomId) {
     io.to(roomId).emit("player:lostConnection", { playerId: leftId, username });
     const result = removePlayer(oldSocketId);
     if (!result.roomId || result.destroyed) {
-        if (result.roomId) stateMachine.cleanupRoom(result.roomId);
+        if (result.roomId) {
+            stateMachine.cleanupRoom(result.roomId);
+            nightResolver.cleanupRoom(result.roomId);
+        }
         return;
     }
 
@@ -192,6 +219,36 @@ function removePlayer(socketId) {
     const gs = rooms.get(roomId);
     const idx = gs.players.findIndex(p => p.id === socketId);
     if (idx === -1) return { roomId, destroyed: false, newHostId: null, state: null };
+
+    delete gs.votes[socketId];
+    delete gs.skipVotes[socketId];
+    delete gs.nominations[socketId];
+
+    for (const voterId of Object.keys(gs.votes)) {
+        if (gs.votes[voterId] === socketId) delete gs.votes[voterId];
+    }
+    for (const nominatorId of Object.keys(gs.nominations)) {
+        if (gs.nominations[nominatorId] === socketId) delete gs.nominations[nominatorId];
+    }
+
+    const gnosiaVotes = gs.nightActions.gnosiaVotes;
+    delete gnosiaVotes[socketId];
+    for (const voterId of Object.keys(gnosiaVotes)) {
+        if (gnosiaVotes[voterId] === socketId) delete gnosiaVotes[voterId];
+    }
+
+    for (const key of ["gnosiaTarget", "engineerTarget", "doctorTarget", "guardianTarget"]) {
+        if (gs.nightActions[key] === socketId) gs.nightActions[key] = null;
+    }
+
+    if (gs.morningReport.killed === socketId) gs.morningReport.killed = null;
+    if (gs.morningReport.coldSleep === socketId) gs.morningReport.coldSleep = null;
+
+    for (const player of gs.players) {
+        if (player.id !== socketId && player.voteTarget === socketId) {
+            player.voteTarget = null;
+        }
+    }
 
     const leaving = gs.players[idx];
     gs.players.splice(idx, 1);

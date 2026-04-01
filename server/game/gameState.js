@@ -24,6 +24,10 @@ function createGameState(roomId, settings = {}) {
         roomId,
         phase: "LOBBY",
         round: 0,
+        meta: {
+            phaseSeq: 0,
+            nightResolvedSeq: null,
+        },
         players: [],
         settings: {
             password: settings.password || null,

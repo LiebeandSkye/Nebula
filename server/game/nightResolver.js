@@ -16,12 +16,46 @@ const { advanceToMorning } = require("./stateMachine");
 
 let _io = null;
 const POST_NIGHT_REVEAL_MS = 6500;
+const pendingNightResolutions = new Map();
+const pendingMorningAdvances = new Map();
 
 /**
  * @param {object} io — Socket.io server instance
  */
 function init(io) {
     _io = io;
+}
+
+function getPhaseSeq(gameState) {
+    return gameState?.meta?.phaseSeq ?? 0;
+}
+
+function clearPendingNightResolution(roomId) {
+    if (!pendingNightResolutions.has(roomId)) return;
+    clearTimeout(pendingNightResolutions.get(roomId));
+    pendingNightResolutions.delete(roomId);
+}
+
+function clearPendingMorningAdvance(roomId) {
+    if (!pendingMorningAdvances.has(roomId)) return;
+    clearTimeout(pendingMorningAdvances.get(roomId));
+    pendingMorningAdvances.delete(roomId);
+}
+
+function scheduleNightResolution(gameState, delayMs = 0) {
+    if (!gameState || gameState.phase !== "NIGHT") return false;
+    if (pendingNightResolutions.has(gameState.roomId)) return false;
+
+    const expectedSeq = getPhaseSeq(gameState);
+    const handle = setTimeout(() => {
+        pendingNightResolutions.delete(gameState.roomId);
+        if (gameState.phase !== "NIGHT") return;
+        if (getPhaseSeq(gameState) !== expectedSeq) return;
+        resolveNight(gameState);
+    }, delayMs);
+
+    pendingNightResolutions.set(gameState.roomId, handle);
+    return true;
 }
 
 // ─────────────────────────────────────────────
@@ -35,6 +69,19 @@ function init(io) {
  * @param {object} gameState
  */
 function resolveNight(gameState) {
+    if (!gameState || gameState.phase !== "NIGHT") return false;
+
+    const meta = gameState.meta || (gameState.meta = {});
+    const phaseSeq = getPhaseSeq(gameState);
+    if (meta.nightResolvedSeq === phaseSeq) {
+        console.log(`[Night] Resolution already completed for room ${gameState.roomId} phase seq ${phaseSeq}`);
+        return false;
+    }
+
+    meta.nightResolvedSeq = phaseSeq;
+    clearPendingNightResolution(gameState.roomId);
+    clearPendingMorningAdvance(gameState.roomId);
+
     const { nightActions, players } = gameState;
 
     console.log(`[Night] Resolving night actions for room ${gameState.roomId}`);
@@ -72,7 +119,14 @@ function resolveNight(gameState) {
 
     // ── Advance FSM to MORNING ────────────────────────────────────────
     // Important: show role result UI first, then advance.
-    setTimeout(() => advanceToMorning(gameState), POST_NIGHT_REVEAL_MS);
+    const handle = setTimeout(() => {
+        pendingMorningAdvances.delete(gameState.roomId);
+        if (gameState.phase !== "NIGHT") return;
+        if (getPhaseSeq(gameState) !== phaseSeq) return;
+        advanceToMorning(gameState);
+    }, POST_NIGHT_REVEAL_MS);
+    pendingMorningAdvances.set(gameState.roomId, handle);
+    return true;
 }
 
 // ─────────────────────────────────────────────
@@ -299,8 +353,15 @@ function allNightActionsSubmitted(gameState) {
     return true;
 }
 
+function cleanupRoom(roomId) {
+    clearPendingNightResolution(roomId);
+    clearPendingMorningAdvance(roomId);
+}
+
 module.exports = {
     init,
     resolveNight,
+    scheduleNightResolution,
     allNightActionsSubmitted,
+    cleanupRoom,
 };

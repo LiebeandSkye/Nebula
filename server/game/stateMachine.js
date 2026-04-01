@@ -29,6 +29,7 @@ const PHASE_DURATIONS = {
 
 // Active timer handles: roomId → TimeoutHandle
 const activeTimers = new Map();
+const pendingGameStarts = new Map();
 
 // io instance — injected via init()
 let _io = null;
@@ -39,6 +40,34 @@ let _io = null;
  */
 function init(io) {
     _io = io;
+}
+
+function ensureMeta(gameState) {
+    if (!gameState.meta || typeof gameState.meta !== "object") {
+        gameState.meta = { phaseSeq: 0, nightResolvedSeq: null };
+    }
+    if (typeof gameState.meta.phaseSeq !== "number") {
+        gameState.meta.phaseSeq = 0;
+    }
+    if (!Object.prototype.hasOwnProperty.call(gameState.meta, "nightResolvedSeq")) {
+        gameState.meta.nightResolvedSeq = null;
+    }
+    return gameState.meta;
+}
+
+function clearPendingGameStart(roomId) {
+    if (!pendingGameStarts.has(roomId)) return;
+    clearTimeout(pendingGameStarts.get(roomId));
+    pendingGameStarts.delete(roomId);
+}
+
+function isGameStartScheduled(roomId) {
+    return pendingGameStarts.has(roomId);
+}
+
+function isCurrentPhase(gameState, expectedPhase, expectedSeq) {
+    const meta = ensureMeta(gameState);
+    return gameState.phase === expectedPhase && meta.phaseSeq === expectedSeq;
 }
 
 // ─────────────────────────────────────────────
@@ -54,11 +83,32 @@ function init(io) {
  */
 function startGame(gameState) {
     if (gameState.phase !== "LOBBY") {
-        throw new Error(`Cannot start game from phase: ${gameState.phase}`);
+        console.warn(`[FSM] Ignored startGame for room ${gameState.roomId} from phase ${gameState.phase}`);
+        return false;
     }
 
     gameState.round = 1;
     transitionTo(gameState, "DAY_DISCUSSION");
+    return true;
+}
+
+function scheduleGameStart(gameState, delayMs = 0) {
+    clearPendingGameStart(gameState.roomId);
+
+    const meta = ensureMeta(gameState);
+    const expectedSeq = meta.phaseSeq;
+    const handle = setTimeout(() => {
+        pendingGameStarts.delete(gameState.roomId);
+        if (!isCurrentPhase(gameState, "LOBBY", expectedSeq)) return;
+        try {
+            startGame(gameState);
+        } catch (err) {
+            console.error(`[FSM] Failed to start game in room ${gameState.roomId}`, err);
+        }
+    }, delayMs);
+
+    pendingGameStarts.set(gameState.roomId, handle);
+    return true;
 }
 
 // ─────────────────────────────────────────────
@@ -74,7 +124,10 @@ function startGame(gameState) {
  */
 function transitionTo(gameState, nextPhase) {
     clearRoomTimer(gameState.roomId);
+    clearPendingGameStart(gameState.roomId);
 
+    const meta = ensureMeta(gameState);
+    meta.phaseSeq += 1;
     gameState.phase = nextPhase;
     gameState.skipVotes = {}; // Clear skip votes for the new phase
 
@@ -96,7 +149,9 @@ function transitionTo(gameState, nextPhase) {
     broadcastPhase(gameState);
 
     // Schedule automatic phase advance
+    const phaseSeq = meta.phaseSeq;
     const handle = setTimeout(() => {
+        if (!isCurrentPhase(gameState, nextPhase, phaseSeq)) return;
         onPhaseExpired(gameState);
     }, durationMs);
 
@@ -269,6 +324,7 @@ function advanceToMorning(gameState) {
  * @returns {boolean} true if game is over
  */
 function checkWin(gameState) {
+    const meta = ensureMeta(gameState);
     const alivePlayers = gameState.players.filter((p) => p.alive);
     const aliveGnosia = alivePlayers.filter((p) => p.role === "gnosia");
     const aliveHumans = alivePlayers.filter((p) => p.role !== "gnosia");
@@ -284,8 +340,14 @@ function checkWin(gameState) {
     if (!winner) return false;
 
     gameState.phase = "END";
+    meta.phaseSeq += 1;
     gameState.winner = winner;
     clearRoomTimer(gameState.roomId);
+    gameState.timers = {
+        phase: "END",
+        endsAt: null,
+        durationMs: null,
+    };
 
     console.log(`[FSM] Game over in room ${gameState.roomId} — ${winner} win!`);
 
@@ -327,9 +389,18 @@ function forceAdvance(gameState, socketId) {
 
 function resetToLobby(gameState) {
     clearRoomTimer(gameState.roomId);
+    clearPendingGameStart(gameState.roomId);
+    const meta = ensureMeta(gameState);
+    meta.phaseSeq += 1;
+    meta.nightResolvedSeq = null;
     gameState.phase = "LOBBY";
     gameState.round = 0;
     gameState.winner = null;
+    gameState.timers = {
+        phase: null,
+        endsAt: null,
+        durationMs: null,
+    };
     gameState.players.forEach(p => {
         p.role = null;
         p.alive = true;
@@ -415,11 +486,14 @@ function broadcastPhase(gameState) {
  */
 function cleanupRoom(roomId) {
     clearRoomTimer(roomId);
+    clearPendingGameStart(roomId);
 }
 
 module.exports = {
     init,
     startGame,
+    scheduleGameStart,
+    isGameStartScheduled,
     transitionTo,
     endVotingEarly,
     advanceToMorning,

@@ -79,52 +79,68 @@ function buildMessage(sender, text, channel) {
 // ── Socket.io ─────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
     console.log(`[Socket] Connected: ${socket.id}`);
+    function reply(cb, payload) {
+        if (typeof cb === "function") cb(payload);
+    }
+
+    function bindAckHandler(event, handler) {
+        socket.on(event, (payload = {}, cb) => {
+            const ack = typeof cb === "function" ? cb : null;
+            try {
+                handler(payload || {}, ack);
+            } catch (err) {
+                const roomId = payload && typeof payload.roomId === "string" ? payload.roomId : "n/a";
+                console.error(`[Socket][${event}] room=${roomId} socket=${socket.id}`, err);
+                reply(ack, { success: false, error: "Internal server error." });
+            }
+        });
+    }
 
     // ── LOBBY ─────────────────────────────────────────────────────────
-    socket.on("room:create", ({ username, profileId, settings, sessionToken }, cb) => {
+    bindAckHandler("room:create", ({ username, profileId, settings, sessionToken }, cb) => {
         const result = createRoom(socket.id, username, profileId, settings, sessionToken || null);
-        if (!result.success) return cb({ success: false, error: result.error });
+        if (!result.success) return reply(cb, { success: false, error: result.error });
         socket.join(result.roomId);
         socket.join(`${result.roomId}:lobby`);
-        cb({ success: true, roomId: result.roomId, state: result.state });
+        reply(cb, { success: true, roomId: result.roomId, state: result.state });
     });
 
-    socket.on("room:join", ({ roomId, username, profileId, password, sessionToken }, cb) => {
+    bindAckHandler("room:join", ({ roomId, username, profileId, password, sessionToken }, cb) => {
         const result = joinRoom(socket.id, roomId, username, profileId, password, sessionToken || null);
-        if (!result.success) return cb({ success: false, error: result.error });
+        if (!result.success) return reply(cb, { success: false, error: result.error });
         socket.join(roomId);
         socket.join(`${roomId}:lobby`);
-        cb({ success: true, state: result.state });
+        reply(cb, { success: true, state: result.state });
         io.to(`${roomId}:lobby`).emit("lobby:updated", { state: result.state });
     });
 
-    socket.on("room:updateSettings", ({ roomId, settings }, cb) => {
+    bindAckHandler("room:updateSettings", ({ roomId, settings }, cb) => {
         const result = updateSettings(socket.id, roomId, settings);
-        if (!result.success) return cb({ success: false, error: result.error });
-        cb({ success: true, state: result.state });
+        if (!result.success) return reply(cb, { success: false, error: result.error });
+        reply(cb, { success: true, state: result.state });
         io.to(`${roomId}:lobby`).emit("lobby:updated", { state: result.state });
     });
 
-    socket.on("room:getState", ({ roomId }, cb) => {
+    bindAckHandler("room:getState", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
-        if (!gs) return cb({ success: false, error: "Room not found." });
-        cb({ success: true, state: sanitizeStateForLobby(gs) });
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        reply(cb, { success: true, state: sanitizeStateForLobby(gs) });
     });
 
-    socket.on("room:leave", ({ roomId }, cb) => {
+    bindAckHandler("room:leave", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
-        if (!gs) return cb({ success: false, error: "Room not found." });
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
 
         const player = gs.players.find(p => p.id === socket.id);
-        if (!player) return cb({ success: false, error: "Player not found in room." });
+        if (!player) return reply(cb, { success: false, error: "Player not found in room." });
 
         // Only allow leaving during LOBBY phase
         if (gs.phase !== "LOBBY") {
-            return cb({ success: false, error: "Cannot leave after game has started." });
+            return reply(cb, { success: false, error: "Cannot leave after game has started." });
         }
 
         const result = removePlayer(socket.id);
-        cb({ success: true });
+        reply(cb, { success: true });
 
         if (result.roomId) {
             io.to(`${result.roomId}:lobby`).emit("lobby:updated", { state: result.state });
@@ -134,12 +150,14 @@ io.on("connection", (socket) => {
         }
 
         if (result.destroyed) {
+            nightResolver.cleanupRoom(roomId);
+            stateMachine.cleanupRoom(roomId);
             console.log(`[Room] Room ${roomId} destroyed (no players left)`);
         }
     });
 
     // Resume after refresh / reconnect (same device sessionToken)
-    socket.on("session:resume", ({ roomId, username, profileId, sessionToken, password }, cb) => {
+    bindAckHandler("session:resume", ({ roomId, username, profileId, sessionToken, password }, cb) => {
         const rid = typeof roomId === "string" ? roomId.trim().toUpperCase() : roomId;
         const result = resumeSession(socket.id, {
             roomId: rid,
@@ -148,7 +166,7 @@ io.on("connection", (socket) => {
             sessionToken,
             password: password ?? null,
         });
-        if (!result.success) return cb(result);
+        if (!result.success) return reply(cb, result);
 
         const gs = result.gameState;
         const player = result.player;
@@ -172,7 +190,7 @@ io.on("connection", (socket) => {
         const rolePayload = player.role ? buildRolePayload(player, gs) : null;
         const phasePayload = inGame ? stateMachine.buildPhasePayload(gs) : null;
 
-        cb({
+        reply(cb, {
             success: true,
             lobbyState: sanitizeStateForLobby(gs),
             phase: gs.phase,
@@ -184,23 +202,26 @@ io.on("connection", (socket) => {
     });
 
     // ── GAME START & RESTART ──────────────────────────────────────────
-    socket.on("room:playAgain", ({ roomId }, cb) => {
+    bindAckHandler("room:playAgain", ({ roomId }, cb) => {
         const result = resetRoom(socket.id, roomId);
-        if (!result.success) return cb({ success: false, error: result.error });
-        cb({ success: true });
+        if (!result.success) return reply(cb, { success: false, error: result.error });
+        reply(cb, { success: true });
     });
 
-    socket.on("game:start", ({ roomId }, cb) => {
+    bindAckHandler("game:start", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
-        if (!gs) return cb({ success: false, error: "Room not found." });
-        if (gs.phase !== "LOBBY") return cb({ success: false, error: "Game already started." });
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        if (gs.phase !== "LOBBY") return reply(cb, { success: false, error: "Game already started." });
+        if (stateMachine.isGameStartScheduled(roomId)) {
+            return reply(cb, { success: false, error: "Game is already starting." });
+        }
 
         const host = gs.players.find(p => p.id === socket.id);
-        if (!host || !host.isHost) return cb({ success: false, error: "Only host can start." });
-        if (gs.players.length < 2) return cb({ success: false, error: "Need at least 2 players." });
+        if (!host || !host.isHost) return reply(cb, { success: false, error: "Only host can start." });
+        if (gs.players.length < 2) return reply(cb, { success: false, error: "Need at least 2 players." });
 
         try { assignRoles(gs); }
-        catch (err) { return cb({ success: false, error: err.message }); }
+        catch (err) { return reply(cb, { success: false, error: err.message }); }
 
         const gnosiaChannel = `${roomId}:gnosia`;
         for (const gid of getGnosiaIds(gs)) {
@@ -212,29 +233,29 @@ io.on("connection", (socket) => {
             io.to(player.id).emit("game:roleAssigned", buildRolePayload(player, gs));
         }
 
-        cb({ success: true });
+        reply(cb, { success: true });
         const gnosiaCount = gs.players.filter(p => p.role === "gnosia").length;
         io.to(roomId).emit("game:starting", { playerCount: gs.players.length, gnosiaCount });
 
-        setTimeout(() => stateMachine.startGame(gs), 5000);
+        stateMachine.scheduleGameStart(gs, 5000);
     });
 
     // ── CHAT ──────────────────────────────────────────────────────────
-    socket.on("chat:message", ({ roomId, channel, text }, cb) => {
+    bindAckHandler("chat:message", ({ roomId, channel, text }, cb) => {
         const gs = getRoom(roomId);
-        if (!gs) return cb({ success: false, error: "Room not found." });
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
 
         const sender = gs.players.find(p => p.id === socket.id);
-        if (!sender) return cb({ success: false, error: "You have been disconnected from the room." });
+        if (!sender) return reply(cb, { success: false, error: "You have been disconnected from the room." });
 
         const trimmed = (text || "").trim();
-        if (!trimmed) return cb({ success: false, error: "Empty message." });
-        if (trimmed.length > 300) return cb({ success: false, error: "Max 300 characters." });
+        if (!trimmed) return reply(cb, { success: false, error: "Empty message." });
+        if (trimmed.length > 300) return reply(cb, { success: false, error: "Max 300 characters." });
 
         const { phase } = gs;
 
         if (channel === "public") {
-            if (phase === "NIGHT") return cb({ success: false, error: "Public chat closed at night." });
+            if (phase === "NIGHT") return reply(cb, { success: false, error: "Public chat closed at night." });
             const msg = buildMessage(sender, trimmed, "public");
             
             // Dead players can see ALL chat (alive and dead messages)
@@ -249,34 +270,34 @@ io.on("connection", (socket) => {
                 // Alive player message - send to everyone (alive AND dead can spectate)
                 io.to(roomId).emit("chat:message", msg);
             }
-            return cb({ success: true });
+            return reply(cb, { success: true });
         }
 
         if (channel === "gnosia") {
-            if (sender.role !== "gnosia") return cb({ success: false, error: "Channel not available." });
+            if (sender.role !== "gnosia") return reply(cb, { success: false, error: "Channel not available." });
             if (phase !== "DAY_DISCUSSION" && phase !== "NIGHT")
-                return cb({ success: false, error: "Gnosia channel not active." });
+                return reply(cb, { success: false, error: "Gnosia channel not active." });
             const msg = buildMessage(sender, trimmed, "gnosia");
             io.to(`${roomId}:gnosia`).emit("chat:message", msg);
-            return cb({ success: true });
+            return reply(cb, { success: true });
         }
 
-        cb({ success: false, error: "Invalid channel." });
+        reply(cb, { success: false, error: "Invalid channel." });
     });
 
     // ── SKIP & VOTING ─────────────────────────────────────────────────
-    socket.on("phase:skip", ({ roomId }, cb) => {
+    bindAckHandler("phase:skip", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
-        if (!gs) return cb({ success: false, error: "Room not found." });
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
         const player = gs.players.find(p => p.id === socket.id && p.alive);
-        if (!player) return cb({ success: false, error: "Not allowed." });
+        if (!player) return reply(cb, { success: false, error: "Not allowed." });
 
         if (gs.phase !== "DAY_DISCUSSION" && gs.phase !== "AFTERNOON") {
-            return cb({ success: false, error: "Cannot skip right now." });
+            return reply(cb, { success: false, error: "Cannot skip right now." });
         }
 
         // Dedup: ignore if this player already voted to skip
-        if (gs.skipVotes[socket.id]) return cb({ success: true });
+        if (gs.skipVotes[socket.id]) return reply(cb, { success: true });
 
         gs.skipVotes[socket.id] = true;
         const skipCount = Object.keys(gs.skipVotes).length;
@@ -295,23 +316,23 @@ io.on("connection", (socket) => {
             gs.skipVotes = {};  // clear before advance so re-entrant calls are no-ops
             stateMachine.forceAdvance(gs, null);
         }
-        cb({ success: true });
+        reply(cb, { success: true });
     });
 
-    socket.on("vote:submit", ({ roomId, targetId }, cb) => {
+    bindAckHandler("vote:submit", ({ roomId, targetId }, cb) => {
         const gs = getRoom(roomId);
-        if (!gs) return cb({ success: false, error: "Room not found." });
-        if (gs.phase !== "VOTING") return cb({ success: false, error: "Not voting phase." });
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        if (gs.phase !== "VOTING") return reply(cb, { success: false, error: "Not voting phase." });
 
         const voter = gs.players.find(p => p.id === socket.id && p.alive);
-        if (!voter) return cb({ success: false, error: "Cannot vote." });
+        if (!voter) return reply(cb, { success: false, error: "Cannot vote." });
         const target = gs.players.find(p => p.id === targetId && p.alive);
-        if (!target) return cb({ success: false, error: "Invalid target." });
-        if (targetId === socket.id) return cb({ success: false, error: "Cannot vote yourself." });
+        if (!target) return reply(cb, { success: false, error: "Invalid target." });
+        if (targetId === socket.id) return reply(cb, { success: false, error: "Cannot vote yourself." });
 
         gs.votes[socket.id] = targetId;
         voter.voteTarget = targetId;
-        cb({ success: true });
+        reply(cb, { success: true });
 
         const votesCast = Object.keys(gs.votes).length;
         const totalAlive = gs.players.filter(p => p.alive).length;
@@ -324,38 +345,38 @@ io.on("connection", (socket) => {
     });
 
     // ── NIGHT ACTIONS ─────────────────────────────────────────────────
-    socket.on("night:action", ({ roomId, actionType, targetId }, cb) => {
+    bindAckHandler("night:action", ({ roomId, actionType, targetId }, cb) => {
         const gs = getRoom(roomId);
-        if (!gs) return cb({ success: false, error: "Room not found." });
-        if (gs.phase !== "NIGHT") return cb({ success: false, error: "Not night phase." });
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        if (gs.phase !== "NIGHT") return reply(cb, { success: false, error: "Not night phase." });
 
         const actor = gs.players.find(p => p.id === socket.id && p.alive);
-        if (!actor) return cb({ success: false, error: "Cannot act." });
+        if (!actor) return reply(cb, { success: false, error: "Cannot act." });
 
         const { nightActions, players } = gs;
 
         switch (actionType) {
             case "gnosia_vote": {
-                if (actor.role !== "gnosia") return cb({ success: false, error: "Not authorized." });
-                if (nightActions.gnosiaVotes[socket.id]) return cb({ success: false, error: "Action already submitted." });
+                if (actor.role !== "gnosia") return reply(cb, { success: false, error: "Not authorized." });
+                if (nightActions.gnosiaVotes[socket.id]) return reply(cb, { success: false, error: "Action already submitted." });
                 if (targetId !== "skip") {
                     const target = players.find(p => p.id === targetId && p.alive && p.id !== socket.id);
-                    if (!target) return cb({ success: false, error: "Invalid target." });
+                    if (!target) return reply(cb, { success: false, error: "Invalid target." });
                 }
                 nightActions.gnosiaVotes[socket.id] = targetId;
                 const gCount = players.filter(p => p.alive && p.role === "gnosia").length;
                 const vIn = Object.keys(nightActions.gnosiaVotes).length;
                 io.to(`${roomId}:gnosia`).emit("night:gnosiaVoteProgress", { votesIn: vIn, totalGnosia: gCount });
-                cb({ success: true });
+                reply(cb, { success: true });
                 break;
             }
             case "engineer": {
-                if (actor.role !== "engineer") return cb({ success: false, error: "Not authorized." });
-                if (nightActions.engineerTarget) return cb({ success: false, error: "Action already submitted." });
+                if (actor.role !== "engineer") return reply(cb, { success: false, error: "Not authorized." });
+                if (nightActions.engineerTarget) return reply(cb, { success: false, error: "Action already submitted." });
                 const target = players.find(p => p.id === targetId && p.alive && p.id !== socket.id);
-                if (!target) return cb({ success: false, error: "Invalid target." });
+                if (!target) return reply(cb, { success: false, error: "Invalid target." });
                 nightActions.engineerTarget = targetId;
-                cb({ success: true });
+                reply(cb, { success: true });
 
                 // Immediately deliver private scan result (no need to wait for night end)
                 const isGnosia = target.role === "gnosia";
@@ -374,12 +395,12 @@ io.on("connection", (socket) => {
                 break;
             }
             case "doctor": {
-                if (actor.role !== "doctor") return cb({ success: false, error: "Not authorized." });
-                if (nightActions.doctorTarget) return cb({ success: false, error: "Action already submitted." });
+                if (actor.role !== "doctor") return reply(cb, { success: false, error: "Not authorized." });
+                if (nightActions.doctorTarget) return reply(cb, { success: false, error: "Action already submitted." });
                 const target = players.find(p => p.id === targetId && p.inColdSleep);
-                if (!target) return cb({ success: false, error: "Target not in Cold Sleep." });
+                if (!target) return reply(cb, { success: false, error: "Target not in Cold Sleep." });
                 nightActions.doctorTarget = targetId;
-                cb({ success: true });
+                reply(cb, { success: true });
 
                 // Immediately deliver private inspection result
                 io.to(actor.id).emit("night:inspectResult", {
@@ -391,48 +412,52 @@ io.on("connection", (socket) => {
                 break;
             }
             case "guardian": {
-                if (actor.role !== "guardian") return cb({ success: false, error: "Not authorized." });
-                if (nightActions.guardianTarget) return cb({ success: false, error: "Action already submitted." });
-                if (targetId === socket.id) return cb({ success: false, error: "Cannot self-protect." });
+                if (actor.role !== "guardian") return reply(cb, { success: false, error: "Not authorized." });
+                if (nightActions.guardianTarget) return reply(cb, { success: false, error: "Action already submitted." });
+                if (targetId === socket.id) return reply(cb, { success: false, error: "Cannot self-protect." });
                 const target = players.find(p => p.id === targetId && p.alive);
-                if (!target) return cb({ success: false, error: "Invalid target." });
+                if (!target) return reply(cb, { success: false, error: "Invalid target." });
                 nightActions.guardianTarget = targetId;
-                cb({ success: true });
+                reply(cb, { success: true });
                 break;
             }
             default:
-                return cb({ success: false, error: "Unknown action." });
+                return reply(cb, { success: false, error: "Unknown action." });
         }
 
         if (nightResolver.allNightActionsSubmitted(gs)) {
-            setTimeout(() => nightResolver.resolveNight(gs), 500);
+            nightResolver.scheduleNightResolution(gs, 500);
         }
     });
 
     // ── HOST DEBUG ────────────────────────────────────────────────────
-    socket.on("phase:forceAdvance", ({ roomId }, cb) => {
+    bindAckHandler("phase:forceAdvance", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
-        if (!gs) return cb({ success: false, error: "Room not found." });
-        cb(stateMachine.forceAdvance(gs, socket.id));
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        reply(cb, stateMachine.forceAdvance(gs, socket.id));
     });
 
     // ── DISCONNECT ────────────────────────────────────────────────────
     socket.on("disconnect", () => {
-        const info = markPlayerDisconnected(socket.id);
-        if (!info.roomId) return;
+        try {
+            const info = markPlayerDisconnected(socket.id);
+            if (!info.roomId) return;
 
-        const gs = getRoom(info.roomId);
-        if (gs) {
-            io.to(`${info.roomId}:lobby`).emit("lobby:updated", { state: sanitizeStateForLobby(gs) });
+            const gs = getRoom(info.roomId);
+            if (gs) {
+                io.to(`${info.roomId}:lobby`).emit("lobby:updated", { state: sanitizeStateForLobby(gs) });
+            }
+
+            scheduleDisconnectRemoval(io, socket.id, info.roomId);
+
+            stateMachine.broadcastToRoom(info.roomId, "player:disconnected", {
+                socketId: socket.id,
+                username: info.username,
+                recovering: true,
+            });
+        } catch (err) {
+            console.error(`[Socket][disconnect] socket=${socket.id}`, err);
         }
-
-        scheduleDisconnectRemoval(io, socket.id, info.roomId);
-
-        stateMachine.broadcastToRoom(info.roomId, "player:disconnected", {
-            socketId: socket.id,
-            username: info.username,
-            recovering: true,
-        });
     });
 });
 
