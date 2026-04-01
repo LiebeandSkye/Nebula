@@ -68,9 +68,6 @@ function resolveNight(gameState) {
     // ── Deliver private results to role holders ───────────────────────
     deliverPrivateResults(gameState, { guardianResult, killResult, scanResult, doctorResult });
 
-    // ── Deliver Guardian outcome messaging ────────────────────────────
-    deliverGuardianOutcome(gameState, { guardianResult, killResult });
-
     console.log(`[Night] Resolution complete. Kill: ${killResult.killed}, Saved: ${killResult.savedBy}`);
 
     // ── Advance FSM to MORNING ────────────────────────────────────────
@@ -183,11 +180,11 @@ function resolveDoctorInspect(gameState) {
 
     if (!targetId) return { inspected: null, role: null };
 
-    // Doctor can only inspect players already in Cold Sleep
-    const target = players.find((p) => p.id === targetId && p.inColdSleep);
+    // Doctor can inspect any dead player (not just Cold Sleep)
+    const target = players.find((p) => p.id === targetId && !p.alive);
     if (!target) {
-        console.log(`[Night] Doctor target ${targetId} is not in Cold Sleep — invalid.`);
-        return { inspected: null, role: null, error: "Target is not in Cold Sleep." };
+        console.log(`[Night] Doctor target ${targetId} is not dead — invalid.`);
+        return { inspected: null, role: null, error: "Target is not dead." };
     }
 
     console.log(`[Night] Doctor inspected ${target.username} → ${target.role}`);
@@ -207,7 +204,7 @@ function deliverPrivateResults(gameState, results) {
     if (!_io) return;
 
     const { players } = gameState;
-    const { scanResult, doctorResult } = results;
+    const { guardianResult, killResult, scanResult, doctorResult } = results;
 
     // Engineer receives their scan result
     if (scanResult.scanned !== null) {
@@ -233,34 +230,39 @@ function deliverPrivateResults(gameState, results) {
             });
         }
     }
-}
 
-function deliverGuardianOutcome(gameState, { guardianResult, killResult }) {
-    if (!_io) return;
-    const { players } = gameState;
+    // Guardian receives their protection result
+    if (guardianResult.protected !== null) {
+        const guardian = players.find((p) => p.role === "guardian" && p.alive);
+        if (guardian) {
+            const worked = killResult.savedBy === "guardian";
+            const targetUsername = players.find((p) => p.id === guardianResult.protected)?.username || "Target";
+            
+            _io.to(guardian.id).emit("night:guardianResult", {
+                targetId: guardianResult.protected,
+                targetUsername,
+                worked,
+            });
 
-    const guardian = players.find((p) => p.role === "guardian" && p.alive);
-    if (!guardian) return;
+            // Also send the flavor message
+            if (worked) {
+                _io.to(guardian.id).emit("ui:toast", {
+                    variant: "gold",
+                    title: "PROTECTION SUCCESS",
+                    message: `You protected ${targetUsername} from Gnosia.`,
+                    durationMs: 6500,
+                });
 
-    // Only show success message if a kill was blocked by guardian.
-    if (killResult.savedBy !== "guardian") return;
-    const protectedId = guardianResult.protected;
-    const protectedName = players.find(p => p.id === protectedId)?.username || "a crew member";
-
-    _io.to(guardian.id).emit("ui:toast", {
-        variant: "gold",
-        title: "PROTECTION SUCCESS",
-        message: `You protected ${protectedName} from Gnosia.`,
-        durationMs: 6500,
-    });
-
-    // Alert gnosia channel (they know a kill was blocked)
-    _io.to(`${gameState.roomId}:gnosia`).emit("ui:toast", {
-        variant: "gold",
-        title: "KILL BLOCKED",
-        message: `Guardian Angel protected ${protectedName}.`,
-        durationMs: 6500,
-    });
+                // Alert gnosia channel (they know a kill was blocked)
+                _io.to(`${gameState.roomId}:gnosia`).emit("ui:toast", {
+                    variant: "gold",
+                    title: "KILL BLOCKED",
+                    message: `A Guardian Angel blocked the kill.`,
+                    durationMs: 6500,
+                });
+            }
+        }
+    }
 }
 
 // ─────────────────────────────────────────────

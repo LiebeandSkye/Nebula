@@ -149,6 +149,24 @@ function onPhaseExpired(gameState) {
 }
 
 // ─────────────────────────────────────────────
+// EARLY PHASE ADVANCES
+// ─────────────────────────────────────────────
+
+/**
+ * Manually ends voting phase when all players have voted.
+ * Called from vote:submit when vote count reaches total alive players.
+ * @param {object} gameState
+ */
+function endVotingEarly(gameState) {
+    if (gameState.phase !== "VOTING") return;
+
+    clearRoomTimer(gameState.roomId);
+    resolveVote(gameState);
+    if (checkWin(gameState)) return;
+    transitionTo(gameState, "AFTERNOON");
+}
+
+// ─────────────────────────────────────────────
 // VOTING RESOLUTION
 // ─────────────────────────────────────────────
 
@@ -174,6 +192,7 @@ function resolveVote(gameState) {
         broadcastToRoom(gameState.roomId, "vote:result", {
             eliminated: null,
             reason: "No votes were cast.",
+            votes: gameState.votes,
         });
         return;
     }
@@ -186,6 +205,7 @@ function resolveVote(gameState) {
         broadcastToRoom(gameState.roomId, "vote:result", {
             eliminated: null,
             reason: "Tie — no one enters Cold Sleep.",
+            votes: gameState.votes,
         });
         return;
     }
@@ -204,6 +224,7 @@ function resolveVote(gameState) {
         eliminatedUsername: target?.username,
         voteCount: topVotes,
         reason: null,
+        votes: gameState.votes,
     });
 }
 
@@ -330,14 +351,13 @@ function broadcastToRoom(roomId, event, data) {
  * Broadcasts the full phase-change payload.
  * Clients use this to update their UI and start countdown timers.
  */
-function broadcastPhase(gameState) {
+function buildPhasePayload(gameState) {
     const gnosiaCount = gameState.players.filter((p) => p.role === "gnosia").length;
-    broadcastToRoom(gameState.roomId, "phase:changed", {
+    return {
         phase: gameState.phase,
         round: gameState.round,
         timers: gameState.timers,
         gnosiaCount,
-        // Public player list (no roles)
         players: gameState.players.map((p) => ({
             id: p.id,
             username: p.username,
@@ -346,8 +366,13 @@ function broadcastPhase(gameState) {
             alive: p.alive,
             inColdSleep: p.inColdSleep,
             isHost: p.isHost,
+            disconnected: !!p.disconnected,
         })),
-    });
+    };
+}
+
+function broadcastPhase(gameState) {
+    broadcastToRoom(gameState.roomId, "phase:changed", buildPhasePayload(gameState));
 }
 
 /**
@@ -362,11 +387,13 @@ module.exports = {
     init,
     startGame,
     transitionTo,
+    endVotingEarly,
     advanceToMorning,
     checkWin,
     forceAdvance,
     cleanupRoom,
     broadcastToRoom,
     broadcastPhase,
+    buildPhasePayload,
     PHASE_DURATIONS,
 };

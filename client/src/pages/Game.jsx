@@ -2,7 +2,7 @@
  * Game.jsx — Fully redesigned. Responsive. Visible timer. NightPanel integrated.
  */
 import { useState, useEffect } from "react";
-import { useSocketEvent } from "../hooks/useSocket";
+import { useSocket, useSocketEvent } from "../hooks/useSocket";
 import PlayerCard from "../components/PlayerCard.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
 import PhaseOverlay from "../components/PhaseOverlay.jsx";
@@ -11,9 +11,23 @@ import StartReveal from "../components/StartReveal.jsx";
 
 const SERVER = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 const AVATAR_COLORS = {
-    setsu: "#a8d8ff", sq: "#00f5ff", raqio: "#ff9ef5", comet: "#ffe066",
-    stella: "#b0ffb8", kornaros: "#ffb347", yuriko: "#ffaec0", jonas: "#c8b8ff",
-    nyx: "#ff6b6b", parallax: "#66e0ff", voss: "#ffd700", echo: "#d0ffe8",
+    setsu: "#a8d8ff",
+    sq: "#ff26db",
+    raqio: "#ff9ef5",
+    comet: "#ffe066",
+    stella: "#00f5ff",
+    kornaros: "#ffb347",
+    yuriko: "#ffaec0",
+    jonas: "#c8b8ff",
+    nyx: "#ff6b6b",
+    parallax: "#66e0ff",
+    voss: "#ffd700",
+    echo: "#d0ffe8",
+    chisa: "#ff4d3d",
+    maomao: "#4eff33",
+    phrolova: "#930c00",
+    miyu: "#ff26db",
+    alya: "#ffffff",
 };
 const PHASE_COLORS = {
     DAY_DISCUSSION: "#00f5ff", VOTING: "#ffd700", AFTERNOON: "#ffb347",
@@ -140,8 +154,9 @@ function GameOverScreen({ result }) {
 // ─────────────────────────────────────────────
 // MAIN GAME
 // ─────────────────────────────────────────────
-export default function Game({ session, socket }) {
+export default function Game({ session, socket, onLeaveRoom }) {
     const { roomId, myId, myRole, allies = [], gnosiaCount } = session;
+    const { reconnecting } = useSocket();
 
     const [players, setPlayers] = useState(session.lastPhasePayload?.players || []);
     const [phase, setPhase] = useState(session.lastPhasePayload?.phase || session.phase || "DAY_DISCUSSION");
@@ -159,6 +174,7 @@ export default function Game({ session, socket }) {
     const [gnosiaVP, setGnosiaVP] = useState({ votesIn: 0, totalGnosia: 0 });
     const [scanResult, setScanResult] = useState(null);
     const [inspectResult, setInspectResult] = useState(null);
+    const [guardianResult, setGuardianResult] = useState(null);
     const [scannedAlert, setScannedAlert] = useState(false);
     const [chatOpen, setChatOpen] = useState(true); // desktop only
     const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -170,6 +186,8 @@ export default function Game({ session, socket }) {
     const [showStartReveal, setShowStartReveal] = useState(false);
     const [hasShownStartReveal, setHasShownStartReveal] = useState(false);
     const [voteReveal, setVoteReveal] = useState(null); // { eliminatedUsername, eliminatedId, reason }
+    const [voteBreakdown, setVoteBreakdown] = useState(null); // { voterId -> targetId }
+    const [lostConnectionNotice, setLostConnectionNotice] = useState("");
 
     const me = players.find(p => p.id === myId);
     const isNight = phase === "NIGHT";
@@ -194,7 +212,8 @@ export default function Game({ session, socket }) {
         setPhase(p); setRound(r); setTimers(t); setPlayers(pl);
         setSelectedTarget(null); setNightSubmitted(false);
         setActionError(""); setActionMsg("");
-        setShowOverlay(true); setScanResult(null); setInspectResult(null);
+        setShowOverlay(true); setScanResult(null); setInspectResult(null); setGuardianResult(null);
+        setVoteBreakdown(null);
         if (p !== "MORNING") setMorningReport(null);
         if (p === "DAY_DISCUSSION" && r === 1 && !hasShownStartReveal) {
             setShowStartReveal(true);
@@ -205,6 +224,7 @@ export default function Game({ session, socket }) {
     useSocketEvent("vote:progress", ({ votesCast, totalAlive }) => setVoteProgress({ votesCast, totalAlive }));
     useSocketEvent("vote:result", result => {
         // Play reveal animation first; apply state after animation completes.
+        setVoteBreakdown(result.votes || {});
         setVoteReveal({
             eliminatedId: result.eliminated || null,
             eliminatedUsername: result.eliminatedUsername || null,
@@ -245,6 +265,17 @@ export default function Game({ session, socket }) {
             durationMs: 6000,
         });
     });
+    useSocketEvent("night:guardianResult", r => {
+        setGuardianResult(r);
+        showResultModal({
+            variant: r?.worked ? "success" : "info",
+            title: "PROTECTION OUTCOME",
+            message: r?.worked 
+                ? `You protected ${r?.targetUsername || "Target"} from Gnosia!`
+                : `Your protection of ${r?.targetUsername || "Target"} was not needed.`,
+            durationMs: 6000,
+        });
+    });
     useSocketEvent("night:scannedAlert", (payload) => {
         setScannedAlert(true);
         setTimeout(() => setScannedAlert(false), 8000);
@@ -278,6 +309,15 @@ export default function Game({ session, socket }) {
             else m.removeListener(apply);
         };
     }, []);
+
+    // Auto-close mobile chat on phase change (except DAY_DISCUSSION)
+    useEffect(() => {
+        if (!isMobile) return;
+        const discussionPhases = ["DAY_DISCUSSION", "LOBBY"];
+        if (!discussionPhases.includes(phase)) {
+            setMobileChatOpen(false);
+        }
+    }, [phase, isMobile]);
     useSocketEvent("night:gnosiaVoteProgress", ({ votesIn, totalGnosia }) => {
         setGnosiaVP({ votesIn, totalGnosia });
         setActionMsg(`${votesIn}/${totalGnosia} Gnosia voted`);
@@ -285,6 +325,16 @@ export default function Game({ session, socket }) {
     useSocketEvent("game:over", r => { setGameOver(r); setPhase("END"); });
     useSocketEvent("player:disconnected", ({ socketId }) => {
         setPlayers(prev => prev.map(p => p.id === socketId ? { ...p, disconnected: true } : p));
+    });
+    useSocketEvent("player:reconnected", ({ previousId, newId }) => {
+        setPlayers(prev => prev.map(p =>
+            p.id === previousId ? { ...p, id: newId, disconnected: false } : p
+        ));
+    });
+    useSocketEvent("player:lostConnection", ({ username, playerId }) => {
+        setLostConnectionNotice(`${username} had lost connection.`);
+        setPlayers(prev => prev.filter(p => p.id !== playerId));
+        setTimeout(() => setLostConnectionNotice(""), 7000);
     });
 
     // ── Actions ───────────────────────────────────────────────
@@ -305,7 +355,101 @@ export default function Game({ session, socket }) {
         });
     }
 
+    function leaveRoom() {
+        if (!window.confirm("Are you sure you want to leave the room? You can only leave during the lobby.")) return;
+        socket.emit("room:leave", { roomId }, res => {
+            if (res.success) {
+                onLeaveRoom?.();
+            } else {
+                alert(res.error || "Failed to leave room.");
+            }
+        });
+    }
+
     if (gameOver) return <GameOverScreen result={gameOver} />;
+
+    // Show reconnecting UI
+    if (reconnecting) {
+        return (
+            <div className="crt star-bg" style={{
+                height: "100vh", display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center",
+                background: "linear-gradient(180deg, #07000fdd 0%, #0d001a99 100%)",
+                overflow: "hidden",
+            }}>
+                {/* Scanlines */}
+                <div style={{
+                    position: "fixed", inset: 0, pointerEvents: "none",
+                    backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px)",
+                }} />
+
+                {/* Reconnecting content */}
+                <div style={{
+                    position: "relative", display: "flex", flexDirection: "column",
+                    alignItems: "center", gap: 32, zIndex: 10,
+                }}>
+                    {/* Pulsing indicator */}
+                    <div style={{
+                        fontSize: 72,
+                        animation: "pulse 1.5s ease-in-out infinite",
+                        filter: "drop-shadow(0 0 30px #00f5ff)",
+                    }}>
+                        ◈
+                    </div>
+
+                    {/* Text */}
+                    <div style={{
+                        display: "flex", flexDirection: "column",
+                        alignItems: "center", gap: 12,
+                    }}>
+                        <h1 style={{
+                            fontSize: 28, letterSpacing: "0.15em",
+                            color: "#00f5ff",
+                            textShadow: "0 0 20px #00f5ff88",
+                            margin: 0,
+                        }}>
+                            RECONNECTING...
+                        </h1>
+                        <p style={{
+                            fontSize: 10, color: "#4a3060",
+                            textAlign: "center", lineHeight: 1.8,
+                            margin: 0,
+                        }}>
+                            Attempting to restore connection<br />to the game server.
+                        </p>
+                    </div>
+
+                    {/* Loading animation */}
+                    <div style={{
+                        display: "flex", gap: 8, alignItems: "center",
+                    }}>
+                        {[0, 1, 2].map(i => (
+                            <div key={i} style={{
+                                width: 8, height: 8,
+                                borderRadius: "50%",
+                                background: "#00f5ff",
+                                boxShadow: "0 0 12px #00f5ff",
+                                animation: `bounce 1.2s ease-in-out infinite`,
+                                animationDelay: `${i * 0.2}s`,
+                            }} />
+                        ))}
+                    </div>
+                </div>
+
+                {/* CSS animations */}
+                <style>{`
+                    @keyframes pulse {
+                        0%, 100% { opacity: 1; transform: scale(1); }
+                        50% { opacity: 0.7; transform: scale(1.1); }
+                    }
+                    @keyframes bounce {
+                        0%, 100% { transform: translateY(0); opacity: 0.6; }
+                        50% { transform: translateY(-12px); opacity: 1; }
+                    }
+                `}</style>
+            </div>
+        );
+    }
 
     const canTarget = p => {
         if (!me?.alive || p.id === myId) return false;
@@ -326,6 +470,27 @@ export default function Game({ session, socket }) {
         <div className="crt star-bg" style={{
             height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden",
         }}>
+            {lostConnectionNotice && (
+                <div style={{
+                    position: "fixed",
+                    top: 12,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    zIndex: 999999,
+                    padding: "10px 20px",
+                    background: "#1a0008ee",
+                    border: "1px solid #ff2a2a55",
+                    color: "#ff8888",
+                    fontSize: 9,
+                    maxWidth: "90vw",
+                    textAlign: "center",
+                    boxShadow: "0 0 20px #000",
+                    pointerEvents: "none",
+                    animation: "fadeInUp 0.2s ease",
+                }}>
+                    {lostConnectionNotice}
+                </div>
+            )}
             {showStartReveal && players.length > 0 && (
                 <StartReveal
                     players={players}
@@ -506,6 +671,18 @@ export default function Game({ session, socket }) {
                             {chatOpen ? "HIDE CHAT" : "SHOW CHAT"}
                         </button>
                     )}
+                    {phase === "LOBBY" && (
+                        <button onClick={leaveRoom} style={{
+                            fontSize: 8, color: "#ff2a2a", border: "1px solid #ff2a2a44",
+                            background: "transparent", padding: "6px 12px",
+                            cursor: "pointer", fontFamily: "Press Start 2P",
+                            transition: "all 0.2s",
+                        }}
+                        onMouseEnter={e => { e.target.borderColor = "#ff2a2a88"; e.target.backgroundColor = "#ff2a2a11"; }}
+                        onMouseLeave={e => { e.target.borderColor = "#ff2a2a44"; e.target.backgroundColor = "transparent"; }}>
+                            LEAVE
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -528,7 +705,7 @@ export default function Game({ session, socket }) {
                             submitted={nightSubmitted} actionMsg={actionMsg}
                             actionError={actionError} onConfirm={submitNightAction}
                             gnosiaVoteProgress={gnosiaVP}
-                            scanResult={scanResult} inspectResult={inspectResult}
+                            scanResult={scanResult} inspectResult={inspectResult} guardianResult={guardianResult}
                         />
                     ) : (
                         <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
@@ -580,7 +757,9 @@ export default function Game({ session, socket }) {
                                             canSelect={me?.alive && canTarget(p)}
                                             onSelect={id => setSelectedTarget(selectedTarget === id ? null : id)}
                                             phase={phase} myRole={myRole}
-                                            gnosiaAllies={allies.map(a => a.id)} />
+                                            gnosiaAllies={allies.map(a => a.id)}
+                                            voteBreakdown={voteBreakdown}
+                                            allPlayers={players} />
                                     ))}
                                 </div>
                             </div>
@@ -698,7 +877,7 @@ export default function Game({ session, socket }) {
                     >
                         <div
                             style={{
-                                width: "min(420px, 92vw)",
+                                width: "100vw",
                                 height: "100%",
                                 background: "#07000f",
                                 borderLeft: "1px solid #2a1a4a",

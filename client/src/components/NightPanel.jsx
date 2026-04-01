@@ -20,9 +20,9 @@ const ROLE_META = {
         actionLabel: "SCAN", filterFn: (p, myId) => p.alive && p.id !== myId
     },
     doctor: {
-        icon: "☤", color: "#b0ffb8", heading: "INSPECT COLD SLEEP",
-        instruction: "Select a Cold Sleep player to reveal their true role.",
-        actionLabel: "INSPECT", filterFn: (p) => p.inColdSleep
+        icon: "☤", color: "#b0ffb8", heading: "INSPECT DEAD PLAYER",
+        instruction: "Select a dead player to reveal their true role.",
+        actionLabel: "INSPECT", filterFn: (p) => !p.alive
     },
     guardian: {
         icon: "🛡", color: "#ffd700", heading: "ASSIGN PROTECTION",
@@ -91,7 +91,7 @@ export default function NightPanel({
     selectedTarget, onSelect, submitted,
     actionMsg, actionError, onConfirm,
     gnosiaVoteProgress = { votesIn: 0, totalGnosia: 0 },
-    scanResult, inspectResult,
+    scanResult, inspectResult, guardianResult,
 }) {
     const meta = ROLE_META[myRole] || ROLE_META.human;
     const color = meta.color;
@@ -190,6 +190,25 @@ export default function NightPanel({
                     </div>
                 </div>
             )}
+            {guardianResult && (
+                <div style={{
+                    margin: "12px 16px 0", padding: "14px 16px",
+                    border: `1px solid ${guardianResult.worked ? "#ffd70044" : "#6a508044"}`,
+                    background: guardianResult.worked ? "#3a2a0033" : "#1a0a2a33",
+                    flexShrink: 0,
+                }}>
+                    <div style={{ fontSize: 8, color: "#4a3060", marginBottom: 6 }}>PROTECTION OUTCOME</div>
+                    <div style={{ fontSize: 11, color: guardianResult.worked ? "#ffd700" : "#b0a0c0" }}>
+                        {guardianResult.targetUsername}
+                    </div>
+                    <div style={{
+                        fontSize: 9, marginTop: 4,
+                        color: guardianResult.worked ? "#ffd700" : "#b0a0c0"
+                    }}>
+                        {guardianResult.worked ? "✓  PROTECTED FROM KILL" : "—  NO KILL ATTEMPT"}
+                    </div>
+                </div>
+            )}
 
             {/* Target list */}
             <div style={{ flex: 1, overflowY: "auto", padding: "12px 12px" }}>
@@ -221,7 +240,7 @@ export default function NightPanel({
                         </div>
                         {targets.length === 0 ? (
                             <p style={{ fontSize: 9, color: "#2a1a3a", textAlign: "center", padding: 16 }}>
-                                {myRole === "doctor" ? "No players in Cold Sleep yet." : "No valid targets."}
+                                {myRole === "doctor" ? "No dead players yet." : "No valid targets."}
                             </p>
                         ) : targets.map(p => (
                             <TargetRow key={p.id} player={p}

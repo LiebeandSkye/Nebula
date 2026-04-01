@@ -3,6 +3,7 @@
  */
 import { useState, useEffect } from "react";
 import { useSocket, useSocketEvent } from "../hooks/useSocket";
+import { getOrCreateSessionToken, savePlaySession } from "../lib/sessionPersistence.js";
 
 const SERVER = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
@@ -70,7 +71,7 @@ function SettingToggle({ label, desc, checked, onChange }) {
     );
 }
 
-export default function Lobby({ onReady }) {
+export default function Lobby({ onReady, resumeFrom }) {
     const { emit, connected } = useSocket();
     const [screen, setScreen] = useState("setup"); // setup | waiting
     const [mode, setMode] = useState("create");
@@ -105,6 +106,14 @@ export default function Lobby({ onReady }) {
     });
     useSocketEvent("game:starting", () => setLoading(true));
 
+    useEffect(() => {
+        if (!resumeFrom?.lobbyState || !resumeFrom.roomId || !resumeFrom.myId) return;
+        setRoomId(resumeFrom.roomId);
+        setMyId(resumeFrom.myId);
+        setLobbyState(resumeFrom.lobbyState);
+        setScreen("waiting");
+    }, [resumeFrom]);
+
     const takenProfiles = lobbyState?.players.map(p => p.profileId) || [];
     const amHost = lobbyState?.players.find(p => p.id === myId && p.isHost);
     const canStart = amHost && (lobbyState?.players.length || 0) >= 2 && !loading;
@@ -113,8 +122,10 @@ export default function Lobby({ onReady }) {
         if (!username.trim()) return setError("Enter a callsign.");
         if (!profileId) return setError("Select a profile.");
         setError(""); setLoading(true);
+        const sessionToken = getOrCreateSessionToken();
         const res = await emit("room:create", {
             username: username.trim(), profileId,
+            sessionToken,
             settings: {
                 password: settings.password || null,
                 hasEngineer: settings.hasEngineer,
@@ -127,7 +138,14 @@ export default function Lobby({ onReady }) {
         if (!res.success) return setError(res.error);
         const me = res.state.players.find(p => p.username === username.trim());
         setMyId(me?.id); setRoomId(res.roomId); setLobbyState(res.state);
-        onReady?.(res.roomId, me?.id, profileId);
+        savePlaySession({
+            sessionToken,
+            roomId: res.roomId,
+            username: username.trim(),
+            profileId,
+            password: settings.password || null,
+        });
+        onReady?.(res.roomId, me?.id, profileId, username.trim(), sessionToken);
         setScreen("waiting");
     }
 
@@ -136,17 +154,26 @@ export default function Lobby({ onReady }) {
         if (!profileId) return setError("Select a profile.");
         if (!joinCode.trim()) return setError("Enter a room code.");
         setError(""); setLoading(true);
+        const sessionToken = getOrCreateSessionToken();
         const res = await emit("room:join", {
             roomId: joinCode.trim().toUpperCase(),
             username: username.trim(), profileId,
             password: joinPass || null,
+            sessionToken,
         });
         setLoading(false);
         if (!res.success) return setError(res.error);
         const me = res.state.players.find(p => p.username === username.trim());
         const rid = joinCode.trim().toUpperCase();
         setMyId(me?.id); setRoomId(rid); setLobbyState(res.state);
-        onReady?.(rid, me?.id, profileId);
+        savePlaySession({
+            sessionToken,
+            roomId: rid,
+            username: username.trim(),
+            profileId,
+            password: joinPass || null,
+        });
+        onReady?.(rid, me?.id, profileId, username.trim(), sessionToken);
         setScreen("waiting");
     }
 
@@ -343,6 +370,25 @@ export default function Lobby({ onReady }) {
                                 </div>
                             </div>
                         )}
+
+                        <button className="btn" style={{ 
+                            width: "100%", 
+                            color: "#ff2a2a",
+                            borderColor: "#ff2a2a44",
+                            background: "transparent"
+                        }}
+                            onClick={() => {
+                                if (window.confirm("Leave the room?")) {
+                                    emit("room:leave", { roomId }).then(() => {
+                                        setRoomId(null);
+                                        setMyId(null);
+                                        setLobbyState(null);
+                                        setScreen("setup");
+                                    });
+                                }
+                            }}>
+                            LEAVE ROOM
+                        </button>
                     </div>
                 </div>
             </div>

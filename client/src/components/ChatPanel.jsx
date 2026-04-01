@@ -6,9 +6,23 @@ import { useSocketEvent } from "../hooks/useSocket";
 
 const SERVER = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 const AVATAR_COLORS = {
-    setsu: "#a8d8ff", sq: "#00f5ff", raqio: "#ff9ef5", comet: "#ffe066",
-    stella: "#b0ffb8", kornaros: "#ffb347", yuriko: "#ffaec0", jonas: "#c8b8ff",
-    nyx: "#ff6b6b", parallax: "#66e0ff", voss: "#ffd700", echo: "#d0ffe8",
+    setsu: "#a8d8ff",
+    sq: "#ff26db",
+    raqio: "#ff9ef5",
+    comet: "#ffe066",
+    stella: "#00f5ff",
+    kornaros: "#ffb347",
+    yuriko: "#ffaec0",
+    jonas: "#c8b8ff",
+    nyx: "#ff6b6b",
+    parallax: "#66e0ff",
+    voss: "#ffd700",
+    echo: "#d0ffe8",
+    chisa: "#ff4d3d",
+    maomao: "#4eff33",
+    phrolova: "#930c00",
+    miyu: "#ff26db",
+    alya: "#ffffff",
 };
 
 const PUBLIC_OPEN_PHASES = ["LOBBY", "DAY_DISCUSSION", "VOTING", "AFTERNOON", "MORNING"];
@@ -29,12 +43,16 @@ function MsgBubble({ msg, isMe }) {
         );
     }
     const color = AVATAR_COLORS[msg.profileId] || "#c8b8ff";
+    const isDead = msg.isAlive === false;
+    const deadColor = "#ff6b6b";
+    
     return (
         <div style={{
             display: "flex", flexDirection: "column",
             alignItems: isMe ? "flex-end" : "flex-start",
             gap: 5, marginBottom: 10,
             animation: "fadeInUp 0.2s ease forwards",
+            opacity: isDead ? 0.85 : 1,
         }}>
             {/* Sender row */}
             <div style={{
@@ -44,21 +62,34 @@ function MsgBubble({ msg, isMe }) {
                 {/* Mini avatar */}
                 <div style={{
                     width: 28, height: 28, flexShrink: 0,
-                    border: `1px solid ${color}55`, background: color + "18",
+                    border: isDead ? `1px solid ${deadColor}66` : `1px solid ${color}55`, 
+                    background: isDead ? deadColor + "18" : color + "18",
                     overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+                    position: "relative",
                 }}>
                     <img src={`${SERVER}/profiles/${msg.profileId}.jpg`}
                         alt={msg.senderName}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", opacity: isDead ? 0.6 : 1 }}
                         onError={e => {
                             e.target.style.display = "none";
                             e.target.nextSibling.style.display = "block";
                         }} />
-                    <span style={{ display: "none", fontSize: 10, color, fontWeight: "bold" }}>
+                    <span style={{ display: "none", fontSize: 10, color: isDead ? deadColor : color, fontWeight: "bold" }}>
                         {msg.senderName[0].toUpperCase()}
                     </span>
+                    {isDead && (
+                        <div style={{
+                            position: "absolute", inset: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            background: "rgba(0,0,0,0.3)",
+                            fontSize: 14,
+                        }}>☠</div>
+                    )}
                 </div>
-                <span style={{ fontSize: 8, color }}>{msg.senderName}</span>
+                <span style={{ fontSize: 8, color: isDead ? deadColor : color }}>{msg.senderName}</span>
+                {isDead && (
+                    <span style={{ fontSize: 7, color: deadColor, fontWeight: "bold" }}>DEAD</span>
+                )}
                 <span style={{ fontSize: 7, color: "#2a1a3a" }}>{msg.time}</span>
             </div>
             {/* Bubble */}

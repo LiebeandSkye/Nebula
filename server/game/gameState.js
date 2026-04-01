@@ -2,11 +2,13 @@
  * gameState.js — Authoritative game state factory.
  */
 
-function createPlayer(socketId, username, profileId, isHost = false) {
+function createPlayer(socketId, username, profileId, isHost = false, sessionToken = null) {
     return {
         id: socketId,
         username,
         profileId,
+        sessionToken: sessionToken || null,
+        disconnected: false,
         isHost,
         role: null,
         alive: true,

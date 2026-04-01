@@ -9,7 +9,10 @@ const cors = require("cors");
 const path = require("path");
 const crypto = require("crypto");
 
-const { createRoom, joinRoom, removePlayer, updateSettings, getRoom, sanitizeStateForLobby } = require("./rooms/roomManager");
+const {
+    createRoom, joinRoom, removePlayer, updateSettings, getRoom, sanitizeStateForLobby,
+    markPlayerDisconnected, scheduleDisconnectRemoval, resumeSession,
+} = require("./rooms/roomManager");
 const { getAllProfiles } = require("./data/profiles");
 const { assignRoles, getGnosiaIds, buildRolePayload } = require("./game/roles");
 const stateMachine = require("./game/stateMachine");
@@ -50,6 +53,7 @@ function buildMessage(sender, text, channel) {
         senderId: sender.id,
         senderName: sender.username,
         profileId: sender.profileId,
+        isAlive: sender.alive,
         timestamp: Date.now(),
     };
 }
@@ -59,16 +63,16 @@ io.on("connection", (socket) => {
     console.log(`[Socket] Connected: ${socket.id}`);
 
     // ── LOBBY ─────────────────────────────────────────────────────────
-    socket.on("room:create", ({ username, profileId, settings }, cb) => {
-        const result = createRoom(socket.id, username, profileId, settings);
+    socket.on("room:create", ({ username, profileId, settings, sessionToken }, cb) => {
+        const result = createRoom(socket.id, username, profileId, settings, sessionToken || null);
         if (!result.success) return cb({ success: false, error: result.error });
         socket.join(result.roomId);
         socket.join(`${result.roomId}:lobby`);
         cb({ success: true, roomId: result.roomId, state: result.state });
     });
 
-    socket.on("room:join", ({ roomId, username, profileId, password }, cb) => {
-        const result = joinRoom(socket.id, roomId, username, profileId, password);
+    socket.on("room:join", ({ roomId, username, profileId, password, sessionToken }, cb) => {
+        const result = joinRoom(socket.id, roomId, username, profileId, password, sessionToken || null);
         if (!result.success) return cb({ success: false, error: result.error });
         socket.join(roomId);
         socket.join(`${roomId}:lobby`);
@@ -87,6 +91,78 @@ io.on("connection", (socket) => {
         const gs = getRoom(roomId);
         if (!gs) return cb({ success: false, error: "Room not found." });
         cb({ success: true, state: sanitizeStateForLobby(gs) });
+    });
+
+    socket.on("room:leave", ({ roomId }, cb) => {
+        const gs = getRoom(roomId);
+        if (!gs) return cb({ success: false, error: "Room not found." });
+
+        const player = gs.players.find(p => p.id === socket.id);
+        if (!player) return cb({ success: false, error: "Player not found in room." });
+
+        // Only allow leaving during LOBBY phase
+        if (gs.phase !== "LOBBY") {
+            return cb({ success: false, error: "Cannot leave after game has started." });
+        }
+
+        const result = removePlayer(socket.id);
+        cb({ success: true });
+
+        if (result.roomId) {
+            io.to(`${result.roomId}:lobby`).emit("lobby:updated", { state: result.state });
+            if (result.newHostId) {
+                io.to(`${result.roomId}:lobby`).emit("lobby:hostChanged", { newHostId: result.newHostId });
+            }
+        }
+
+        if (result.destroyed) {
+            console.log(`[Room] Room ${roomId} destroyed (no players left)`);
+        }
+    });
+
+    // Resume after refresh / reconnect (same device sessionToken)
+    socket.on("session:resume", ({ roomId, username, profileId, sessionToken, password }, cb) => {
+        const rid = typeof roomId === "string" ? roomId.trim().toUpperCase() : roomId;
+        const result = resumeSession(socket.id, {
+            roomId: rid,
+            username,
+            profileId,
+            sessionToken,
+            password: password ?? null,
+        });
+        if (!result.success) return cb(result);
+
+        const gs = result.gameState;
+        const player = result.player;
+        const oldId = result.oldSocketId;
+
+        socket.join(rid);
+        socket.join(`${rid}:lobby`);
+        if (player.role === "gnosia") {
+            socket.join(`${rid}:gnosia`);
+        }
+
+        io.to(`${rid}:lobby`).emit("lobby:updated", { state: sanitizeStateForLobby(gs) });
+
+        io.to(rid).emit("player:reconnected", {
+            previousId: oldId,
+            newId: socket.id,
+            username: player.username,
+        });
+
+        const inGame = gs.phase !== "LOBBY" && gs.phase !== "END";
+        const rolePayload = player.role ? buildRolePayload(player, gs) : null;
+        const phasePayload = inGame ? stateMachine.buildPhasePayload(gs) : null;
+
+        cb({
+            success: true,
+            lobbyState: sanitizeStateForLobby(gs),
+            phase: gs.phase,
+            inGame,
+            phasePayload,
+            rolePayload,
+            myId: socket.id,
+        });
     });
 
     // ── GAME START ────────────────────────────────────────────────────
@@ -125,8 +201,7 @@ io.on("connection", (socket) => {
         if (!gs) return cb({ success: false, error: "Room not found." });
 
         const sender = gs.players.find(p => p.id === socket.id);
-        if (!sender) return cb({ success: false, error: "Player not found." });
-        if (!sender.alive) return cb({ success: false, error: "Dead players cannot chat." });
+        if (!sender) return cb({ success: false, error: "You have been disconnected from the room." });
 
         const trimmed = (text || "").trim();
         if (!trimmed) return cb({ success: false, error: "Empty message." });
@@ -137,7 +212,26 @@ io.on("connection", (socket) => {
         if (channel === "public") {
             if (phase === "NIGHT") return cb({ success: false, error: "Public chat closed at night." });
             const msg = buildMessage(sender, trimmed, "public");
-            io.to(roomId).emit("chat:message", msg);
+            
+            // Dead players can see ALL chat (alive and dead messages)
+            // Alive players only see alive player messages
+            if (!sender.alive) {
+                // Dead player message - only send to dead players
+                const deadPlayers = gs.players.filter(p => !p.alive).map(p => p.id);
+                deadPlayers.forEach(deadId => {
+                    io.to(deadId).emit("chat:message", msg);
+                });
+            } else {
+                // Alive player message - send to alive AND dead (so dead can spectate)
+                const alivePlayers = gs.players.filter(p => p.alive).map(p => p.id);
+                alivePlayers.forEach(aliveId => {
+                    io.to(aliveId).emit("chat:message", msg);
+                });
+                const deadPlayers = gs.players.filter(p => !p.alive).map(p => p.id);
+                deadPlayers.forEach(deadId => {
+                    io.to(deadId).emit("chat:message", msg);
+                });
+            }
             return cb({ success: true });
         }
 
@@ -172,6 +266,11 @@ io.on("connection", (socket) => {
         const votesCast = Object.keys(gs.votes).length;
         const totalAlive = gs.players.filter(p => p.alive).length;
         io.to(roomId).emit("vote:progress", { votesCast, totalAlive });
+
+        // Check if all alive players have voted — if yes, end voting early
+        if (votesCast === totalAlive) {
+            stateMachine.endVotingEarly(gs);
+        }
     });
 
     // ── NIGHT ACTIONS ─────────────────────────────────────────────────
@@ -263,16 +362,21 @@ io.on("connection", (socket) => {
 
     // ── DISCONNECT ────────────────────────────────────────────────────
     socket.on("disconnect", () => {
-        const result = removePlayer(socket.id);
-        if (!result.roomId || result.destroyed) {
-            if (result.roomId) stateMachine.cleanupRoom(result.roomId);
-            return;
+        const info = markPlayerDisconnected(socket.id);
+        if (!info.roomId) return;
+
+        const gs = getRoom(info.roomId);
+        if (gs) {
+            io.to(`${info.roomId}:lobby`).emit("lobby:updated", { state: sanitizeStateForLobby(gs) });
         }
-        io.to(`${result.roomId}:lobby`).emit("lobby:updated", { state: result.state });
-        if (result.newHostId) {
-            io.to(`${result.roomId}:lobby`).emit("lobby:hostChanged", { newHostId: result.newHostId });
-        }
-        stateMachine.broadcastToRoom(result.roomId, "player:disconnected", { socketId: socket.id });
+
+        scheduleDisconnectRemoval(io, socket.id, info.roomId);
+
+        stateMachine.broadcastToRoom(info.roomId, "player:disconnected", {
+            socketId: socket.id,
+            username: info.username,
+            recovering: true,
+        });
     });
 });
 

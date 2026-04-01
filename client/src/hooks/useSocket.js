@@ -24,8 +24,10 @@ function getSocket() {
         socketInstance = io(SERVER_URL, {
             autoConnect: true,
             reconnection: true,
-            reconnectionAttempts: 10,
+            reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
+            reconnectionDelayMax: 15000,
+            timeout: 20000,
         });
     }
     return socketInstance;
@@ -38,17 +40,30 @@ function getSocket() {
 export function useSocket() {
     const socket = getSocket();
     const [connected, setConnected] = useState(socket.connected);
+    const [reconnecting, setReconnecting] = useState(false);
 
     useEffect(() => {
-        function onConnect() { setConnected(true); }
-        function onDisconnect() { setConnected(false); }
+        function onConnect() {
+            setConnected(true);
+            setReconnecting(false);
+        }
+        function onDisconnect() {
+            setConnected(false);
+            setReconnecting(true);
+        }
+        /** Fired while socket.io is attempting to reconnect */
+        function onReconnectAttempt() {
+            setReconnecting(true);
+        }
 
         socket.on("connect", onConnect);
         socket.on("disconnect", onDisconnect);
+        socket.io.on("reconnect_attempt", onReconnectAttempt);
 
         return () => {
             socket.off("connect", onConnect);
             socket.off("disconnect", onDisconnect);
+            socket.io.off("reconnect_attempt", onReconnectAttempt);
         };
     }, [socket]);
 
@@ -68,7 +83,7 @@ export function useSocket() {
         });
     }, [socket]);
 
-    return { socket, connected, emit };
+    return { socket, connected, reconnecting, emit };
 }
 
 /**

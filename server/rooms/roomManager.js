@@ -5,18 +5,22 @@
 const { v4: uuidv4 } = require("uuid");
 const { createGameState, createPlayer } = require("../game/gameState");
 const { isValidProfileId, getProfileById } = require("../data/profiles");
+const stateMachine = require("../game/stateMachine");
 
 const rooms = new Map();
 const MAX_PLAYERS = 12;
+/** @type {Map<string, NodeJS.Timeout>} oldSocketId -> removal timer */
+const disconnectGraceTimers = new Map();
+const DISCONNECT_GRACE_MS = 45 * 1000;
 
-function createRoom(socketId, username, profileId, settings = {}) {
+function createRoom(socketId, username, profileId, settings = {}, sessionToken = null) {
     if (!isValidProfileId(profileId)) return { success: false, error: "Invalid profile." };
     const err = validateUsername(username);
     if (err) return { success: false, error: err };
 
     const roomId = generateRoomId();
     const gameState = createGameState(roomId, settings);
-    const host = createPlayer(socketId, username, profileId, true);
+    const host = createPlayer(socketId, username, profileId, true, sessionToken);
     host.profileName = getProfileById(profileId)?.name || null;
     gameState.players.push(host);
     rooms.set(roomId, gameState);
@@ -24,7 +28,7 @@ function createRoom(socketId, username, profileId, settings = {}) {
     return { success: true, roomId, state: sanitizeStateForLobby(gameState) };
 }
 
-function joinRoom(socketId, roomId, username, profileId, password = null) {
+function joinRoom(socketId, roomId, username, profileId, password = null, sessionToken = null) {
     const gs = rooms.get(roomId);
     if (!gs) return { success: false, error: "Room not found." };
     if (gs.phase !== "LOBBY") return { success: false, error: "Game already started." };
@@ -42,10 +46,143 @@ function joinRoom(socketId, roomId, username, profileId, password = null) {
     if (gs.players.find(p => p.username.toLowerCase() === username.toLowerCase()))
         return { success: false, error: "Username taken." };
 
-    const player = createPlayer(socketId, username, profileId, false);
+    const player = createPlayer(socketId, username, profileId, false, sessionToken);
     player.profileName = getProfileById(profileId)?.name || null;
     gs.players.push(player);
     return { success: true, state: sanitizeStateForLobby(gs) };
+}
+
+/**
+ * Rewires game state when a player reconnects with a new socket id.
+ */
+function migrateSocketId(gs, oldId, newId) {
+    if (oldId === newId) return;
+    const p = gs.players.find((x) => x.id === oldId);
+    if (!p) return;
+    p.id = newId;
+    p.disconnected = false;
+
+    if (gs.votes[oldId] !== undefined) {
+        gs.votes[newId] = gs.votes[oldId];
+        delete gs.votes[oldId];
+    }
+    for (const k of Object.keys(gs.votes)) {
+        if (gs.votes[k] === oldId) gs.votes[k] = newId;
+    }
+
+    const gv = gs.nightActions.gnosiaVotes;
+    if (gv[oldId] !== undefined) {
+        gv[newId] = gv[oldId];
+        delete gv[oldId];
+    }
+    for (const k of Object.keys(gv)) {
+        if (gv[k] === oldId) gv[k] = newId;
+    }
+
+    const na = gs.nightActions;
+    for (const key of ["gnosiaTarget", "engineerTarget", "doctorTarget", "guardianTarget"]) {
+        if (na[key] === oldId) na[key] = newId;
+    }
+
+    const mr = gs.morningReport;
+    if (mr.killed === oldId) mr.killed = newId;
+    if (mr.coldSleep === oldId) mr.coldSleep = newId;
+}
+
+function cancelDisconnectGrace(oldSocketId) {
+    const t = disconnectGraceTimers.get(oldSocketId);
+    if (t) {
+        clearTimeout(t);
+        disconnectGraceTimers.delete(oldSocketId);
+    }
+}
+
+/**
+ * Mark player disconnected; they may resume within DISCONNECT_GRACE_MS.
+ * @returns {{ roomId: string|null, username: string|null, profileName: string|null }}
+ */
+function markPlayerDisconnected(socketId) {
+    const roomId = findRoomBySocket(socketId);
+    if (!roomId) return { roomId: null, username: null, profileName: null };
+
+    const gs = rooms.get(roomId);
+    const p = gs?.players.find((x) => x.id === socketId);
+    if (!p) return { roomId: null, username: null, profileName: null };
+
+    p.disconnected = true;
+    return { roomId, username: p.username, profileName: p.profileName || null };
+}
+
+function scheduleDisconnectRemoval(io, oldSocketId, roomId) {
+    cancelDisconnectGrace(oldSocketId);
+    const timer = setTimeout(() => {
+        disconnectGraceTimers.delete(oldSocketId);
+        finalizePermanentDisconnect(io, oldSocketId, roomId);
+    }, DISCONNECT_GRACE_MS);
+    disconnectGraceTimers.set(oldSocketId, timer);
+}
+
+/**
+ * Remove player if they never resumed (socket id still matches).
+ */
+function finalizePermanentDisconnect(io, oldSocketId, roomId) {
+    const gs = rooms.get(roomId);
+    if (!gs) return;
+
+    const p = gs.players.find((x) => x.id === oldSocketId);
+    if (!p || !p.disconnected) return;
+
+    const leftId = p.id;
+    const username = p.username;
+    io.to(roomId).emit("player:lostConnection", { playerId: leftId, username });
+    const result = removePlayer(oldSocketId);
+    if (!result.roomId || result.destroyed) {
+        if (result.roomId) stateMachine.cleanupRoom(result.roomId);
+        return;
+    }
+
+    io.to(`${result.roomId}:lobby`).emit("lobby:updated", { state: result.state });
+    if (result.newHostId) {
+        io.to(`${result.roomId}:lobby`).emit("lobby:hostChanged", { newHostId: result.newHostId });
+    }
+    if (gs.phase !== "LOBBY" && gs.phase !== "END") {
+        stateMachine.broadcastPhase(gs);
+    }
+}
+
+/**
+ * Resume seat after refresh / new socket.
+ */
+function resumeSession(newSocketId, { roomId, username, profileId, sessionToken, password }) {
+    const gs = getRoom(roomId);
+    if (!gs) return { success: false, error: "Room not found." };
+    if (gs.settings.password && password !== gs.settings.password) {
+        return { success: false, error: "Wrong password." };
+    }
+    if (!sessionToken) return { success: false, error: "Invalid session." };
+
+    const player = gs.players.find((p) =>
+        p.sessionToken === sessionToken &&
+        p.username === username.trim() &&
+        p.profileId === profileId
+    );
+    if (!player) return { success: false, error: "Session not found." };
+
+    const oldId = player.id;
+    cancelDisconnectGrace(oldId);
+
+    if (oldId !== newSocketId) {
+        migrateSocketId(gs, oldId, newSocketId);
+    } else {
+        player.disconnected = false;
+    }
+
+    return {
+        success: true,
+        gameState: gs,
+        player,
+        oldSocketId: oldId,
+    };
 }
 
 function removePlayer(socketId) {
@@ -125,6 +262,7 @@ function sanitizeStateForLobby(gs) {
         players: gs.players.map(p => ({
             id: p.id, username: p.username, profileId: p.profileId, profileName: p.profileName || null,
             isHost: p.isHost, alive: p.alive, inColdSleep: p.inColdSleep,
+            disconnected: !!p.disconnected,
         })),
         winner: gs.winner,
         timers: gs.timers,
@@ -134,4 +272,6 @@ function sanitizeStateForLobby(gs) {
 module.exports = {
     createRoom, joinRoom, removePlayer, updateSettings,
     getRoom, findRoomBySocket, sanitizeStateForLobby,
+    markPlayerDisconnected, scheduleDisconnectRemoval,
+    resumeSession, cancelDisconnectGrace, migrateSocketId,
 };
