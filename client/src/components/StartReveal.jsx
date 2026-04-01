@@ -15,7 +15,7 @@ export default function StartReveal({ players, gnosiaCount, onDismiss }) {
                 <div className="text-center mb-4">
                     <div className="glow-cyan text-3xl mb-3">MISSION START</div>
                     <div className="text-2xl text-white leading-snug">
-                        There are <span className="glow-purple">{gnosiaCount}</span> Gnosia Among Us
+                        There are <span className="glow-danger">{gnosiaCount}</span> Gnosia Among Us
                     </div>
                 </div>
 

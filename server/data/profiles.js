@@ -90,6 +90,41 @@ const PROFILES = [
         avatar: "/profiles/echo.jpg",
         color: "#d0ffe8",
     },
+    {
+        id: 'chisa',
+        name: 'Chisa',
+        description: "absolute peak",
+        avatar: "/profiles/chisa.webp",
+        color: "#ff1c1c"
+    },
+    {
+        id: 'maomao',
+        name: 'Maomao',
+        description: "doctor",
+        avatar: "/profiles/maomao.webp",
+        color: "#4eff33"
+    },
+    {
+        id: 'phrolova',
+        name: 'Phrolova',
+        description: "requested by rinz",
+        avatar: "/profiles/phrolova.webp",
+        color: "#f80000"
+    },
+    {
+        id: 'miyu',
+        name: 'Miyu',
+        description: "requested by seth",
+        avatar: "/profiles/miyu.webp",
+        color: "#ff26db"
+    },
+    {
+        id: 'alya',
+        name: 'Alya',
+        description: "requested by seth",
+        avatar: "/profiles/alya.jpg",
+        color: "#ffffff"
+    }
 ];
 
 /**

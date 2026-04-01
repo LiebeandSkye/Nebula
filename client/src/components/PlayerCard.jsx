@@ -3,9 +3,23 @@
  */
 const SERVER = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 const AVATAR_COLORS = {
-    setsu: "#a8d8ff", sq: "#00f5ff", raqio: "#ff9ef5", comet: "#ffe066",
-    stella: "#b0ffb8", kornaros: "#ffb347", yuriko: "#ffaec0", jonas: "#c8b8ff",
-    nyx: "#ff6b6b", parallax: "#66e0ff", voss: "#ffd700", echo: "#d0ffe8",
+    setsu: "#a8d8ff",
+    sq: "#ff26db",
+    raqio: "#ff9ef5",
+    comet: "#ffe066",
+    stella: "#00f5ff",
+    kornaros: "#ffb347",
+    yuriko: "#ffaec0",
+    jonas: "#c8b8ff",
+    nyx: "#ff6b6b",
+    parallax: "#66e0ff",
+    voss: "#ffd700",
+    echo: "#d0ffe8",
+    chisa: "#ff4d3d",
+    maomao: "#4eff33",
+    phrolova: "#930c00",
+    miyu: "#ff26db",
+    alya: "#ffffff",
 };
 
 export default function PlayerCard({
