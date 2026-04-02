@@ -229,6 +229,13 @@ export default function App() {
         if (screenRef.current !== "game") setScreen("game");
     });
 
+    useSocketEvent("room:backToLobby", (lobbyState) => {
+        setLobbyResume({ lobbyState, roomId: session.roomId, myId: session.myId });
+        setSession(s => ({ ...s, phase: "LOBBY", myRole: null }));
+        setRoleData(null);
+        setScreen("lobby");
+    });
+
     function handleLobbyReady(roomId, myId, myProfileId) {
         setSession(s => ({
             ...s,

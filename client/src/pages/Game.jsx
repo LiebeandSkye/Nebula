@@ -726,7 +726,7 @@ export default function Game({ session, socket, onLeaveRoom }) {
                     minWidth: chatPanelOpen && !isMobile ? 280 : undefined,
                     transition: "width 0.2s",
                 }}>
-                    {isNight ? (
+                    {isNight && me?.alive ? (
                         <NightPanel
                             myRole={myRole} players={players} myId={myId}
                             gnosiaAllies={allies}
@@ -736,6 +736,14 @@ export default function Game({ session, socket, onLeaveRoom }) {
                             gnosiaVoteProgress={gnosiaVP}
                             scanResult={scanResult} inspectResult={inspectResult} guardianResult={guardianResult}
                         />
+                    ) : isNight ? (
+                        <div style={{
+                            flex: 1, display: "flex", alignItems: "center",
+                            justifyContent: "center", flexDirection: "column", gap: 16,
+                        }}>
+                            <div style={{ fontSize: 36, opacity: 0.15 }}>☽</div>
+                            <span style={{ fontSize: 9, color: "#2a1a3a" }}>SPECTATING — AWAIT DAWN</span>
+                        </div>
                     ) : (
                         <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
 
