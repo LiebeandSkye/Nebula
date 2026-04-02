@@ -156,10 +156,11 @@ function GameOverScreen({ result, onPlayAgain, amHost }) {
 // MAIN GAME
 // ─────────────────────────────────────────────
 export default function Game({ session, socket, onLeaveRoom }) {
-    const { roomId, myId, myRole, allies = [], gnosiaCount } = session;
+    const { roomId, myId, myRole, allies: initialAllies = [], gnosiaCount } = session;
     const { reconnecting } = useSocket();
 
     const [players, setPlayers] = useState(session.lastPhasePayload?.players || []);
+    const [allies, setAllies] = useState(initialAllies);
     const [phase, setPhase] = useState(session.lastPhasePayload?.phase || session.phase || "DAY_DISCUSSION");
     const [round, setRound] = useState(session.lastPhasePayload?.round || 1);
     const [timers, setTimers] = useState(session.lastPhasePayload?.timers || {});
@@ -212,6 +213,13 @@ export default function Game({ session, socket, onLeaveRoom }) {
     }, [phase, round, players.length, hasShownStartReveal]);
 
     // ── Listeners ─────────────────────────────────────────────
+    useSocketEvent("game:roleAssigned", (rolePayload) => {
+        // Update allies when role is assigned
+        if (rolePayload.role === "gnosia" && rolePayload.gnosiaAllies) {
+            setAllies(rolePayload.gnosiaAllies);
+        }
+    });
+
     useSocketEvent("phase:changed", ({ phase: p, round: r, timers: t, players: pl, skipVotes: sv, morningReport: mr }) => {
         setPhase(p); setRound(r); setTimers(t); setPlayers(pl);
         setSelectedTarget(null); setNightSubmitted(false);

@@ -66,16 +66,26 @@ export default function PlayerCard({
                     transform: isSelected ? "translateY(-4px)" : "translateY(0)",
                 }}>
 
-                {/* Badges */}
+                {/* Top Center Badges */}
                 <div style={{
-                    position: "absolute", top: compact ? 3 : 6, right: compact ? 3 : 6, display: "flex",
-                    flexDirection: "column", gap: 2, alignItems: "flex-end",
+                    position: "absolute", top: compact ? -8 : -10, left: "50%", transform: "translateX(-50%)", display: "flex",
+                    flexDirection: "row", gap: 4, alignItems: "center",
+                    zIndex: 10,
                 }}>
-                    {isMe && <span className="badge" style={{ color: "#00f5ff", fontSize: compact ? 6 : 8 }}>YOU</span>}
-                    {player.isHost && <span className="badge" style={{ color: "#ffd700", fontSize: compact ? 6 : 8 }}>HOST</span>}
-                    {isAlly && <span className="badge" style={{ color: "#9b30ff", fontSize: compact ? 6 : 8 }}>ALLY</span>}
-                    {player.inColdSleep && <span className="badge" style={{ color: "#4a3060", fontSize: compact ? 6 : 8 }}>COLD</span>}
+                    {player.isHost && <span className="badge" style={{ color: "#ffd700", fontSize: compact ? 5 : 6 }}>HOST</span>}
+                    {isAlly && <span className="badge" style={{ color: "#9b30ff", fontSize: compact ? 5 : 6 }}>ALLY</span>}
+                    {player.inColdSleep && <span className="badge" style={{ color: "#4a3060", fontSize: compact ? 5 : 6 }}>COLD</span>}
                 </div>
+
+                {/* Bottom YOU Badge */}
+                {isMe && (
+                    <div style={{
+                        position: "absolute", bottom: compact ? -8 : -10, left: "50%", transform: "translateX(-50%)",
+                        zIndex: 10,
+                    }}>
+                        <span className="badge" style={{ color: "#00f5ff", fontSize: compact ? 5 : 6 }}>YOU</span>
+                    </div>
+                )}
 
                 {/* Avatar */}
                 <div style={{
