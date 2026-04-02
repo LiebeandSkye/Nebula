@@ -12,7 +12,7 @@ const ROLE_META = {
     gnosia: {
         icon: "👁", color: "#9b30ff", heading: "COORDINATE THE KILL",
         instruction: "Vote for a kill target. Majority decides. Ties = no kill.",
-        actionLabel: "KILL", filterFn: (p, myId) => p.alive && p.id !== myId
+        actionLabel: "KILL", filterFn: (p, myId, allies = []) => p.alive && p.id !== myId && !allies.some(a => a.id === p.id)
     },
     engineer: {
         icon: "⚡", color: "#00f5ff", heading: "RUN BIOSCAN",
@@ -20,9 +20,9 @@ const ROLE_META = {
         actionLabel: "SCAN", filterFn: (p, myId) => p.alive && p.id !== myId
     },
     doctor: {
-        icon: "☤", color: "#b0ffb8", heading: "INSPECT DEAD PLAYER",
-        instruction: "Select a dead player to reveal their true role.",
-        actionLabel: "INSPECT", filterFn: (p) => !p.alive
+        icon: "☤", color: "#b0ffb8", heading: "INSPECT COLD SLEEP",
+        instruction: "Select a cold-slept player to reveal their true role.",
+        actionLabel: "INSPECT", filterFn: (p) => p.inColdSleep
     },
     guardian: {
         icon: "🛡", color: "#ffd700", heading: "ASSIGN PROTECTION",
@@ -95,7 +95,7 @@ export default function NightPanel({
 }) {
     const meta = ROLE_META[myRole] || ROLE_META.human;
     const color = meta.color;
-    const targets = players.filter(p => meta.filterFn(p, myId));
+    const targets = players.filter(p => meta.filterFn(p, myId, gnosiaAllies));
 
     return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -240,7 +240,7 @@ export default function NightPanel({
                         </div>
                         {targets.length === 0 ? (
                             <p style={{ fontSize: 9, color: "#2a1a3a", textAlign: "center", padding: 16 }}>
-                                {myRole === "doctor" ? "No dead players yet." : "No valid targets."}
+                                {myRole === "doctor" ? "No one in cold sleep yet." : "No valid targets."}
                             </p>
                         ) : targets.map(p => (
                             <TargetRow key={p.id} player={p}

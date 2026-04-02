@@ -205,6 +205,8 @@ io.on("connection", (socket) => {
     bindAckHandler("room:playAgain", ({ roomId }, cb) => {
         const result = resetRoom(socket.id, roomId);
         if (!result.success) return reply(cb, { success: false, error: result.error });
+        const gs = getRoom(roomId);
+        if (gs) io.to(roomId).emit("room:backToLobby", sanitizeStateForLobby(gs));
         reply(cb, { success: true });
     });
 
@@ -403,6 +405,7 @@ io.on("connection", (socket) => {
                 if (targetId !== "skip") {
                     const target = players.find(p => p.id === targetId && p.alive && p.id !== socket.id);
                     if (!target) return reply(cb, { success: false, error: "Invalid target." });
+                    if (target.role === "gnosia") return reply(cb, { success: false, error: "Cannot vote for an ally." });
                 }
                 nightActions.gnosiaVotes[socket.id] = targetId;
                 const gCount = players.filter(p => p.alive && p.role === "gnosia").length;
