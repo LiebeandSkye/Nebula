@@ -187,7 +187,7 @@ function resolveGnosiaKill(gameState) {
 
 /**
  * Resolves Gnosia kill vote by simple majority.
- * Ties → random pick among tied candidates.
+ * Ties → no kill.
  * @param {object} votes — { [voterId]: targetId }
  * @returns {string|null} winning targetId or null
  */
@@ -200,10 +200,10 @@ function resolveGnosiaVoteMajority(votes = {}) {
     const entries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
     if (entries.length === 0) return null;
 
-    const topCount = entries[0][1];
-    const tied = entries.filter(([, count]) => count === topCount).map(([id]) => id);
+    const [topId, topCount] = entries[0];
+    const isTie = entries.length > 1 && entries[1][1] === topCount;
 
-    return tied[Math.floor(Math.random() * tied.length)];
+    return isTie ? null : topId;
 }
 
 // ─────────────────────────────────────────────
@@ -239,11 +239,11 @@ function resolveDoctorInspect(gameState) {
 
     if (!targetId) return { inspected: null, role: null };
 
-    // Doctor can only inspect cold-slept players (voted out)
-    const target = players.find((p) => p.id === targetId && p.inColdSleep);
+    // Doctor can inspect any dead player (not just Cold Sleep)
+    const target = players.find((p) => p.id === targetId && !p.alive);
     if (!target) {
-        console.log(`[Night] Doctor target ${targetId} is not in cold sleep — invalid.`);
-        return { inspected: null, role: null, error: "Target has not been cold-slept." };
+        console.log(`[Night] Doctor target ${targetId} is not dead — invalid.`);
+        return { inspected: null, role: null, error: "Target is not dead." };
     }
 
     console.log(`[Night] Doctor inspected ${target.username} → ${target.role}`);
@@ -349,9 +349,8 @@ function allNightActionsSubmitted(gameState) {
     // Engineer
     if (settings.hasEngineer && hasRole("engineer") && !nightActions.engineerTarget) return false;
 
-    // Doctor — skip if no one has been cold-slept (voted out)
-    const hasColdSleepPlayers = players.some(p => p.inColdSleep);
-    if (settings.hasDoctor && hasRole("doctor") && hasColdSleepPlayers && !nightActions.doctorTarget) return false;
+    // Doctor
+    if (settings.hasDoctor && hasRole("doctor") && !nightActions.doctorTarget) return false;
 
     // Guardian
     if (settings.hasGuardian && hasRole("guardian") && !nightActions.guardianTarget) return false;
