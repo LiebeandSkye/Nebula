@@ -24,8 +24,9 @@ function assignRoles(gameState) {
     if (settings.hasDoctor) specials.push("doctor");
     if (settings.hasGuardian) specials.push("guardian");
     if (settings.hasLawyer) specials.push("lawyer");
+    if (settings.hasTraitor) specials.push("traitor");
 
-    const maxSpecials = Math.max(0, total - gnosiaCount - 1);
+    const maxSpecials = Math.max(0, total - gnosiaCount);
     rolePool.push(...specials.slice(0, maxSpecials));
 
     while (rolePool.length < total) rolePool.push("human");
@@ -67,6 +68,7 @@ const ROLE_DESCRIPTIONS = {
     doctor: "You are the Doctor. Each night, inspect one player in Cold Sleep to reveal their true role.",
     guardian: "You are the Guardian Angel. Each night, protect one other player. If the Gnosia target them, the kill is blocked.",
     lawyer: "You are the Lawyer. Once per game, you may dismiss the vote during any voting round — cancelling it entirely so no one is eliminated.",
+    traitor: "You are the Traitor. You have no special ability, but you appear human to all scans and inspections. You win with the Gnosia.",
 };
 
 module.exports = { assignRoles, getGnosiaIds, buildRolePayload, ROLE_DESCRIPTIONS };

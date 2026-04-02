@@ -34,7 +34,15 @@ function Avatar({ profileId, username, size = 56, color }) {
     );
 }
 
-function SettingToggle({ label, desc, checked, onChange }) {
+const ROLE_DESCRIPTIONS = {
+    engineer: "Each night, scan one player to learn if they are Gnosia. If they are, they receive a warning — not your identity.",
+    doctor:   "Each night, inspect one player in Cold Sleep to reveal their true role.",
+    guardian: "Each night, protect one other player. If the Gnosia target them, the kill is blocked.",
+    lawyer:   "Once per game, you may dismiss the vote during any voting round — cancelling it entirely so no one is eliminated.",
+    traitor:  "You have no special ability, but you appear human to all scans and inspections. You win with the Gnosia.",
+};
+
+function SettingToggle({ label, desc, checked, onChange, onInfo }) {
     return (
         <label style={{
             display: "flex", alignItems: "center", gap: 16, cursor: "pointer",
@@ -44,6 +52,13 @@ function SettingToggle({ label, desc, checked, onChange }) {
                 <div style={{ fontSize: 10, color: "#e0d4ff", marginBottom: 4 }}>{label}</div>
                 {desc && <div style={{ fontSize: 8, color: "#4a3060" }}>{desc}</div>}
             </div>
+            {onInfo && (
+                <button onClick={e => { e.preventDefault(); onInfo(); }} style={{
+                    fontSize: 8, color: "#4a3060", border: "1px solid #2a1a4a",
+                    background: "transparent", padding: "4px 8px",
+                    cursor: "pointer", fontFamily: "Press Start 2P", flexShrink: 0,
+                }}>?</button>
+            )}
             <input type="checkbox" className="toggle" checked={checked}
                 onChange={e => onChange(e.target.checked)} />
         </label>
@@ -63,9 +78,10 @@ export default function Lobby({ onReady, resumeFrom }) {
     const [roomId, setRoomId] = useState(null);
     const [myId, setMyId] = useState(null);
     const [lobbyState, setLobbyState] = useState(null);
+    const [expandedRole, setExpandedRole] = useState(null);
     const [settings, setSettings] = useState({
         password: "", hasEngineer: false, hasDoctor: false,
-        hasGuardian: false, hasLawyer: false, gnosiaCount: "",
+        hasGuardian: false, hasLawyer: false, hasTraitor: false, gnosiaCount: "",
     });
 
     useSocketEvent("lobby:updated", ({ state }) => setLobbyState(state));
@@ -103,6 +119,7 @@ export default function Lobby({ onReady, resumeFrom }) {
                 hasDoctor: settings.hasDoctor,
                 hasGuardian: settings.hasGuardian,
                 hasLawyer: settings.hasLawyer,
+                hasTraitor: settings.hasTraitor,
                 gnosiaCount: settings.gnosiaCount ? parseInt(settings.gnosiaCount) : null,
             },
         });
@@ -159,6 +176,7 @@ export default function Lobby({ onReady, resumeFrom }) {
                 hasDoctor: next.hasDoctor,
                 hasGuardian: next.hasGuardian,
                 hasLawyer: next.hasLawyer,
+                hasTraitor: next.hasTraitor,
                 gnosiaCount: next.gnosiaCount ? parseInt(next.gnosiaCount) : null,
             },
         });
@@ -285,19 +303,53 @@ export default function Lobby({ onReady, resumeFrom }) {
                                 <SettingToggle label="ENGINEER ROLE"
                                     desc="Scans players at night for Gnosia"
                                     checked={settings.hasEngineer}
-                                    onChange={v => changeSetting("hasEngineer", v)} />
+                                    onChange={v => changeSetting("hasEngineer", v)}
+                                    onInfo={() => setExpandedRole(r => r === "engineer" ? null : "engineer")} />
+                                {expandedRole === "engineer" && (
+                                    <div style={{ fontSize: 8, color: "#6a5080", lineHeight: 1.8, padding: "8px 0 12px", borderBottom: "1px solid #1a0a2a" }}>
+                                        {ROLE_DESCRIPTIONS.engineer}
+                                    </div>
+                                )}
                                 <SettingToggle label="DOCTOR ROLE"
                                     desc="Inspects Cold Sleep players"
                                     checked={settings.hasDoctor}
-                                    onChange={v => changeSetting("hasDoctor", v)} />
+                                    onChange={v => changeSetting("hasDoctor", v)}
+                                    onInfo={() => setExpandedRole(r => r === "doctor" ? null : "doctor")} />
+                                {expandedRole === "doctor" && (
+                                    <div style={{ fontSize: 8, color: "#6a5080", lineHeight: 1.8, padding: "8px 0 12px", borderBottom: "1px solid #1a0a2a" }}>
+                                        {ROLE_DESCRIPTIONS.doctor}
+                                    </div>
+                                )}
                                 <SettingToggle label="GUARDIAN ANGEL"
                                     desc="Protects one player per night"
                                     checked={settings.hasGuardian}
-                                    onChange={v => changeSetting("hasGuardian", v)} />
+                                    onChange={v => changeSetting("hasGuardian", v)}
+                                    onInfo={() => setExpandedRole(r => r === "guardian" ? null : "guardian")} />
+                                {expandedRole === "guardian" && (
+                                    <div style={{ fontSize: 8, color: "#6a5080", lineHeight: 1.8, padding: "8px 0 12px", borderBottom: "1px solid #1a0a2a" }}>
+                                        {ROLE_DESCRIPTIONS.guardian}
+                                    </div>
+                                )}
                                 <SettingToggle label="LAWYER ROLE"
                                     desc="Can dismiss one vote per game"
                                     checked={settings.hasLawyer}
-                                    onChange={v => changeSetting("hasLawyer", v)} />
+                                    onChange={v => changeSetting("hasLawyer", v)}
+                                    onInfo={() => setExpandedRole(r => r === "lawyer" ? null : "lawyer")} />
+                                {expandedRole === "lawyer" && (
+                                    <div style={{ fontSize: 8, color: "#6a5080", lineHeight: 1.8, padding: "8px 0 12px", borderBottom: "1px solid #1a0a2a" }}>
+                                        {ROLE_DESCRIPTIONS.lawyer}
+                                    </div>
+                                )}
+                                <SettingToggle label="TRAITOR ROLE"
+                                    desc="Appears human to all checks, wins with Gnosia"
+                                    checked={settings.hasTraitor}
+                                    onChange={v => changeSetting("hasTraitor", v)}
+                                    onInfo={() => setExpandedRole(r => r === "traitor" ? null : "traitor")} />
+                                {expandedRole === "traitor" && (
+                                    <div style={{ fontSize: 8, color: "#6a5080", lineHeight: 1.8, padding: "8px 0 12px", borderBottom: "1px solid #1a0a2a" }}>
+                                        {ROLE_DESCRIPTIONS.traitor}
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="panel" style={{ padding: 20 }}>
@@ -305,20 +357,36 @@ export default function Lobby({ onReady, resumeFrom }) {
                                     ACTIVE SETTINGS
                                 </div>
                                 {[
-                                    { key: "hasEngineer", label: "ENGINEER" },
-                                    { key: "hasDoctor", label: "DOCTOR" },
-                                    { key: "hasGuardian", label: "GUARDIAN ANGEL" },
-                                    { key: "hasLawyer", label: "LAWYER" },
-                                ].map(({ key, label }) => (
-                                    <div key={key} style={{
-                                        display: "flex", justifyContent: "space-between",
-                                        padding: "10px 0", borderBottom: "1px solid #1a0a2a",
-                                        fontSize: 9
-                                    }}>
-                                        <span style={{ color: "#4a3060" }}>{label}</span>
-                                        <span style={{ color: lobbyState?.settings[key] ? "#00f5ff" : "#2a1a3a" }}>
-                                            {lobbyState?.settings[key] ? "ON" : "OFF"}
-                                        </span>
+                                    { key: "hasEngineer", label: "ENGINEER", role: "engineer" },
+                                    { key: "hasDoctor", label: "DOCTOR", role: "doctor" },
+                                    { key: "hasGuardian", label: "GUARDIAN ANGEL", role: "guardian" },
+                                    { key: "hasLawyer", label: "LAWYER", role: "lawyer" },
+                                    { key: "hasTraitor", label: "TRAITOR", role: "traitor" },
+                                ].map(({ key, label, role }) => (
+                                    <div key={key}>
+                                        <div style={{
+                                            display: "flex", justifyContent: "space-between",
+                                            alignItems: "center",
+                                            padding: "10px 0", borderBottom: "1px solid #1a0a2a",
+                                            fontSize: 9
+                                        }}>
+                                            <span style={{ color: "#4a3060" }}>{label}</span>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                <button onClick={() => setExpandedRole(r => r === role ? null : role)} style={{
+                                                    fontSize: 8, color: "#4a3060", border: "1px solid #2a1a4a",
+                                                    background: "transparent", padding: "2px 7px",
+                                                    cursor: "pointer", fontFamily: "Press Start 2P",
+                                                }}>?</button>
+                                                <span style={{ color: lobbyState?.settings[key] ? "#00f5ff" : "#2a1a3a" }}>
+                                                    {lobbyState?.settings[key] ? "ON" : "OFF"}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {expandedRole === role && (
+                                            <div style={{ fontSize: 8, color: "#6a5080", lineHeight: 1.8, padding: "8px 0 12px", borderBottom: "1px solid #1a0a2a" }}>
+                                                {ROLE_DESCRIPTIONS[role]}
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>

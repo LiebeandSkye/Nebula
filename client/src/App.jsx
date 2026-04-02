@@ -9,9 +9,9 @@ import { clearPlaySession, loadPlaySession } from "./lib/sessionPersistence.js";
 
 const ROLE_COLORS = {
     gnosia: "#9b30ff", engineer: "#00f5ff", doctor: "#b0ffb8",
-    guardian: "#ffd700", human: "#c8b8ff", lawyer: "#ff8833",
+    guardian: "#ffd700", human: "#c8b8ff", lawyer: "#ff8833", traitor: "#ff4040",
 };
-const ROLE_ICONS = { gnosia: "👁", engineer: "⚡", doctor: "☤", guardian: "🛡", human: "◈", lawyer: "⚖" };
+const ROLE_ICONS = { gnosia: "👁", engineer: "⚡", doctor: "☤", guardian: "🛡", human: "◈", lawyer: "⚖", traitor: "◈" };
 
 function RoleReveal({ roleData }) {
     const color = ROLE_COLORS[roleData.role] || "#c8b8ff";

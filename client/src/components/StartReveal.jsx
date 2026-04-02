@@ -1,11 +1,17 @@
 // StartReveal.jsx
 import { useEffect } from "react";
+const ROLE_COLORS = {
+    gnosia: "#9b30ff", engineer: "#00f5ff", doctor: "#b0ffb8",
+    guardian: "#ffd700", human: "#c8b8ff", lawyer: "#ff8833", traitor: "#ff4040",
+};
 
-export default function StartReveal({ players, gnosiaCount, onDismiss }) {
+export default function StartReveal({ players, gnosiaCount, myId, myRole, onDismiss }) {
     useEffect(() => {
         const timer = setTimeout(() => onDismiss(), 5000);
         return () => clearTimeout(timer);
     }, [onDismiss]);
+
+    const roleColor = ROLE_COLORS[myRole] || "#00f5ff";
 
     return (
         <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -19,25 +25,35 @@ export default function StartReveal({ players, gnosiaCount, onDismiss }) {
 
                 <div className="panel-glow p-6 bg-black/60">
                     <div className="flex flex-wrap justify-center gap-6">
-                        {players.map((p) => (
-                            <div key={p.id} className="flex flex-col items-center w-[110px]">
-                                <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#00f5ff55]">
-                                    <img
-                                        src={`/profiles/${p.profileId}.jpg`}
-                                        alt={p.username}
-                                        className="w-full h-full object-cover"
-                                        onError={(e) => {
-                                            e.target.style.display = "none";
-                                            e.target.nextSibling.style.display = "flex";
-                                        }}
-                                    />
-                                    <div className="hidden w-full h-full items-center justify-center text-[#00f5ff] text-xl font-bold">
-                                        {p.username[0].toUpperCase()}
+                        {players.map((p) => {
+                            const isMe = p.id === myId;
+                            const borderColor = isMe ? roleColor : "#00f5ff55";
+                            const boxShadow = isMe ? `0 0 12px ${roleColor}88` : "none";
+                            return (
+                                <div key={p.id} className="flex flex-col items-center w-[110px]">
+                                    <div className="w-20 h-20 rounded-full overflow-hidden border-2"
+                                        style={{ borderColor, boxShadow }}>
+                                        <img
+                                            src={`/profiles/${p.profileId}.jpg`}
+                                            alt={p.username}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => {
+                                                e.target.style.display = "none";
+                                                e.target.nextSibling.style.display = "flex";
+                                            }}
+                                        />
+                                        <div className="hidden w-full h-full items-center justify-center text-xl font-bold"
+                                            style={{ color: borderColor }}>
+                                            {p.username[0].toUpperCase()}
+                                        </div>
+                                    </div>
+                                    <div className="text-sm mt-3 text-center truncate w-full"
+                                        style={{ color: isMe ? roleColor : "white" }}>
+                                        {p.username}
                                     </div>
                                 </div>
-                                <div className="text-sm mt-3 text-white text-center truncate w-full">{p.username}</div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 

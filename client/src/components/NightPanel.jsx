@@ -29,6 +29,11 @@ const ROLE_META = {
         instruction: "You have no night ability. Hope the Gnosia don't choose you.",
         actionLabel: null, filterFn: () => false
     },
+    traitor: {
+        icon: "◈", color: "#ff4040", heading: "WAIT FOR DAWN",
+        instruction: "You have no night ability. You appear human to all checks. Win with the Gnosia.",
+        actionLabel: null, filterFn: () => false
+    },
 };
 
 function TargetRow({ player, isSelected, label, color, onSelect }) {
@@ -207,7 +212,7 @@ export default function NightPanel({
 
             {/* Target list */}
             <div style={{ flex: 1, overflowY: "auto", padding: "12px 12px" }}>
-                {myRole === "human" ? (
+                {myRole === "human" || myRole === "traitor" ? (
                     <div style={{
                         height: "100%", display: "flex", alignItems: "center",
                         justifyContent: "center", flexDirection: "column", gap: 16
@@ -248,7 +253,7 @@ export default function NightPanel({
             </div>
 
             {/* Confirm bar */}
-            {myRole !== "human" && !submitted && (
+            {myRole !== "human" && myRole !== "traitor" && !submitted && (
                 <div style={{
                     flexShrink: 0, borderTop: "1px solid #1a0a2a", padding: "14px 16px",
                     background: "#07000f", display: "flex", flexDirection: "column", gap: 10

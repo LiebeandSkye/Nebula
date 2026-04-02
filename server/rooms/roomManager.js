@@ -275,7 +275,7 @@ function updateSettings(socketId, roomId, settings) {
     const host = gs.players.find(p => p.id === socketId);
     if (!host || !host.isHost) return { success: false, error: "Only host can change settings." };
 
-    const allowed = ["password", "hasEngineer", "hasDoctor", "hasGuardian", "hasLawyer", "gnosiaCount"];
+    const allowed = ["password", "hasEngineer", "hasDoctor", "hasGuardian", "hasLawyer", "hasTraitor", "gnosiaCount"];
     for (const key of allowed) {
         if (settings[key] !== undefined) gs.settings[key] = settings[key];
     }
@@ -314,6 +314,7 @@ function sanitizeStateForLobby(gs) {
             hasEngineer: gs.settings.hasEngineer,
             hasDoctor: gs.settings.hasDoctor,
             hasGuardian: gs.settings.hasGuardian,
+            hasTraitor: gs.settings.hasTraitor,
             gnosiaCount: gs.settings.gnosiaCount,
         },
         players: gs.players.map(p => ({

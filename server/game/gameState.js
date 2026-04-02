@@ -36,6 +36,7 @@ function createGameState(roomId, settings = {}) {
             hasDoctor: settings.hasDoctor || false,
             hasGuardian: settings.hasGuardian || false,
             hasLawyer: settings.hasLawyer || false,
+            hasTraitor: settings.hasTraitor || false,
             gnosiaCount: settings.gnosiaCount || null, // null = auto (floor(n/3))
         },
         nightActions: {

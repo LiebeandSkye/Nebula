@@ -248,7 +248,9 @@ function resolveDoctorInspect(gameState) {
 
     console.log(`[Night] Doctor inspected ${target.username} → ${target.role}`);
 
-    return { inspected: targetId, role: target.role };
+    // Traitor disguises as human to the doctor
+    const revealedRole = target.role === "traitor" ? "human" : target.role;
+    return { inspected: targetId, role: revealedRole };
 }
 
 // ─────────────────────────────────────────────

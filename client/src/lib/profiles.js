@@ -53,13 +53,13 @@ export const PROFILES = [
         color: "#c8b8ff",
     },
     {
-        id: "nyx",
+        id: "parallax",
         name: "L",
         description: "Says nothing for hours, then drops a bombshell.",
         color: "#ff6b6b",
     },
     {
-        id: "parallax",
+        id: "nyx",
         name: "Kira",
         description: "AHHAHAHHA Souda... boku ga KIRA DA.",
         color: "#66e0ff",
