@@ -28,6 +28,8 @@ const PROFILE_MAP = new Map([
     ["batman", "Batman"],
     ["wonderwomen", "Wonder Woman"],
     ["osaragi", "Osaragi"],
+    ["demigod", "Demi god"],
+    ["gnosia", "404"]
 ]);
 
 function isValidProfileId(id) {

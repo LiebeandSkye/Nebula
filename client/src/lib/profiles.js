@@ -122,7 +122,7 @@ export const PROFILES = [
         id: "batman",
         name: "Batman",
         description: "The Dark Knight",
-        color: "#000000",
+        color: "#323232",
     }, 
     {   
         id: "wonderwomen",
@@ -135,6 +135,18 @@ export const PROFILES = [
         name: "Osaragi",
         description: "A mysterious figure with a penchant for riddles.",
         color: "#7fffd4",
+    },
+    {
+        id: "demigod",
+        name: "Demi god",
+        description: "A demigod with godly powers.",
+        color: "#ffffff",
+    },
+    {
+        id: "gnosia",
+        name: "404",
+        description: "Unknown",
+        color: "#ffffff",
     }
 ];
 
