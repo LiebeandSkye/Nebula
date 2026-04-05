@@ -41,6 +41,12 @@ export const PROFILES = [
         color: "#ffb347",
     },
     {
+        id: "ruby",
+        name: "Ruby",
+        description: "A fiery girl with a sharp tongue.",
+        color: "#f530b3",
+    },
+    {
         id: "yuriko",
         name: "Yuriko",
         description: "Sweet exterior. Ruthless interior.",
@@ -147,7 +153,37 @@ export const PROFILES = [
         name: "404",
         description: "Unknown",
         color: "#ffffff",
-    }
+    },
+    {
+        id: "king",
+        name: "King",
+        description: "Luckiest Man",
+        color: "#f23e0c"
+    },
+    {
+        id: "ayanokoji",
+        name: "Ayanokoji",
+        description: "Manipulative",
+        color: "#e30000",
+    },
+    {
+        id: "mitsuri",
+        name: "Mitsuri",
+        description: "A cheerful and energetic girl.",
+        color: "#f82fff",
+    },
+    {
+        id: "aizen",
+        name: "Aizen",
+        description: "Aizen Sosuke",
+        color: "#89008d",
+    },
+    {
+        id: "fatcat",
+        name: "Fat Cat",
+        description: "A chubby cat with a round body.",
+        color: "#ffffff",
+    },
 ];
 
 /** Color lookup by profile ID */

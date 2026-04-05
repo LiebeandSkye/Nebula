@@ -25,7 +25,13 @@ const AURA_ROLL_OPTIONS = [
     "aura-sparkle-white",
     "aura-sparkle-yellow",
     "aura-sparkle-pink",
-    "aura-judgement"
+    "aura-judgement",
+    // New auras
+    "aura-red-saiyan",
+    "aura-halo",
+    "aura-void",
+    "aura-sparkle-rainbow",
+    "aura-sparkle-red"
 ];
 
 const AURA_PREVIEW = {
@@ -79,9 +85,40 @@ const AURA_PREVIEW = {
     },
     "aura-judgement": {
         border: "#00f5ff88",
-        shadow: "0 0 32px rgba(0, 245, 255, 0.3)",
+        shadow: "0 0 32px rgba(0, 245, 255, 0.28)",
         color: "#00f5ff",
         label: "JUDGEMENT",
+    },
+    // New aura previews
+    "aura-red-saiyan": {
+        border: "#ff6b6b88",
+        shadow: "0 0 25px rgba(255, 107, 107, 0.24)",
+        color: "#ff6b6b",
+        label: "RED SAIYAN",
+    },
+    "aura-halo": {
+        border: "#ffd70088",
+        shadow: "0 0 20px rgba(255, 215, 0, 0.30)",
+        color: "#ffd700",
+        label: "HALO",
+    },
+    "aura-void": {
+        border: "#4a008088",
+        shadow: "0 0 30px rgba(74, 0, 128, 0.32)",
+        color: "#4a0080",
+        label: "VOID",
+    },
+    "aura-sparkle-rainbow": {
+        border: "#ff00ff88",
+        shadow: "0 0 26px rgba(255, 0, 255, 0.30)",
+        color: "#ff00ff",
+        label: "RAINBOW SPARKLE",
+    },
+    "aura-sparkle-red": {
+        border: "#ff6b6b88",
+        shadow: "0 0 22px rgba(255, 107, 107, 0.28)",
+        color: "#ff6b6b",
+        label: "RED SPARKLE",
     },
 };
 const ROLE_COLORS = {
@@ -696,14 +733,57 @@ export default function Game({ session, socket, onLeaveRoom }) {
                         <div style={{ flex: 1, overflow: "hidden" }}><NightPanel myRole={myRole} players={players} myId={myId} gnosiaAllies={allies} selectedTarget={selectedTarget} onSelect={setSelectedTarget} submitted={nightSubmitted} actionMsg={actionMsg} actionError={actionError} onConfirm={submitNightAction} gnosiaVoteProgress={gnosiaVP} scanResult={scanResult} inspectResult={inspectResult} guardianResult={guardianResult} /></div>
                     ) : (
                         <div style={{ flexShrink: 0 }}>
-                            <div style={{ padding: "12px 16px", background: "#0d0020", display: "flex", flexDirection: "column", gap: 10 }}>
-                                {isVoting && me?.alive && <button className="btn btn-gold" style={{ width: "100%", fontSize: 9 }} onClick={submitVote} disabled={!selectedTarget || hasVoted}>{hasVoted ? "✓ LOCKED" : "⚖ VOTE"}</button>}
-                                {showSkipBar && <SkipBar skipVotes={skipVotes} myId={myId} onSkip={requestSkipPhase} />}
-                            </div>
+                            {isVoting && me?.alive ? (
+                                <div style={{ 
+                                    padding: "16px", background: "#0d0020", 
+                                    display: "flex", flexDirection: "column", gap: 12,
+                                    borderBottom: "1px solid #1a0a2a",
+                                    boxShadow: "0 4px 20px rgba(0,0,0,0.5)"
+                                }}>
+                                    {/* Main Vote Button */}
+                                    <button 
+                                        className="btn btn-gold" 
+                                        style={{ width: "100%", fontSize: 10, height: 48, boxShadow: "0 0 15px #ffd70022" }} 
+                                        onClick={submitVote} 
+                                        disabled={!selectedTarget || hasVoted}
+                                    >
+                                        {hasVoted ? "✓ VOTE LOCKED" : selectedTarget ? `⚖ VOTE: ${players.find(p => p.id === selectedTarget)?.username || "TARGET"}` : "SELECT TO VOTE"}
+                                    </button>
+                                    
+                                    {/* Lawyer Dismiss Button - More prominently styled */}
+                                    {myRole === "lawyer" && (
+                                        <button 
+                                            className="btn"
+                                            style={{ 
+                                                width: "100%", 
+                                                height: 44,
+                                                fontSize: 8, 
+                                                letterSpacing: "0.05em",
+                                                background: hasLawyerDismissed ? "#1a0a2a66" : "#7a3a0022", 
+                                                color: hasLawyerDismissed ? "#3a2a4a" : "#ffbb55", 
+                                                border: `1px solid ${hasLawyerDismissed ? "#2a1a4a" : "#ff8833"}`, 
+                                                fontFamily: "Press Start 2P" 
+                                            }} 
+                                            onClick={dismissVote} 
+                                            disabled={hasLawyerDismissed}
+                                        >
+                                            {hasLawyerDismissed ? "DISMISS USED" : "⚖ LAWYER: DISMISS VOTE"}
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                showSkipBar && (
+                                    <div style={{ padding: "12px 16px", background: "#0d0020", borderBottom: "1px solid #1a0a2a" }}>
+                                        <SkipBar skipVotes={skipVotes} myId={myId} onSkip={requestSkipPhase} />
+                                    </div>
+                                )
+                            )}
                         </div>
                     )}
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <ChatPanel 
+                        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+                            {/* Visual divider for the chat panel to prevent perceived overlap */}
+                            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, #2a1a4a, transparent)", zIndex: 10 }} />
+                            <ChatPanel 
                             roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} 
                             isPanelOpen={true}
                             pubMsgs={pubMsgs} gnMsgs={gnMsgs}

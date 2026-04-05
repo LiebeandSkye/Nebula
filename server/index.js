@@ -472,9 +472,18 @@ io.on("connection", (socket) => {
             "aura-glitch",
             "aura-sparkle-white",
             "aura-sparkle-yellow",
-            "aura-sparkle-pink"
+            "aura-sparkle-pink",
+            "aura-judgement",
+            "aura-red-saiyan",
+            "aura-halo",
+            "aura-void",
+            "aura-sparkle-rainbow",
+            "aura-sparkle-red"
         ];
+        console.log(`[ROLL] Available auras: ${auras.length} total`);
+        console.log(`[ROLL] Aura list: ${auras.join(', ')}`);
         const picked = auras[Math.floor(Math.random() * auras.length)];
+        console.log(`[ROLL] Random index: ${Math.floor(Math.random() * auras.length)}, picked: ${picked}`);
         player.aura = picked;
         player.rollsRemaining = (player.rollsRemaining || 2) - 1;
         console.log(`[ROLL] Success: ${player.username} got ${picked}, rolls remaining: ${player.rollsRemaining}`);

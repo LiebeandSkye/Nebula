@@ -12,6 +12,7 @@ const PROFILE_MAP = new Map([
     ["comet", "Femboy"],
     ["stella", "Akane"],
     ["kornaros", "Aqua"],
+    ["ruby", "Ruby"],
     ["yuriko", "Yuriko"],
     ["jonas", "ishowspeed"],
     ["parallax", "L"],
@@ -30,6 +31,11 @@ const PROFILE_MAP = new Map([
     ["osaragi", "Osaragi"],
     ["demigod", "Demi god"],
     ["gnosia", "404"],
+    ["king", "King"],
+    ["ayanokoji", "Ayanokoji"],
+    ["mitsuri", "Mitsuri"],
+    ["aizen", "Aizen"],
+    ["fatcat", "Fat Cat"],
 ]);
 
 function isValidProfileId(id) {

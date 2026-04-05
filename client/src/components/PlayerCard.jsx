@@ -74,6 +74,51 @@ const SPARKLE_COLUMNS = buildAuraColumns([
     [70, 8, 4, 4, 0, 8, 5],
 ], 0.25);
 
+// New aura columns for the 5 new auras
+const RED_SAIYAN_COLUMNS = buildAuraColumns([
+    [50, 54, 22, 58, 0, 21, 8],
+    [40, 49, 18, 48, -8, 17, 7],
+    [60, 49, 18, 48, 8, 17, 7],
+    [45, 51, 16, 53, -4, 18, 8],
+    [55, 51, 16, 53, 4, 18, 8],
+    [30, 40, 14, 41, -14, 14, 6],
+    [70, 40, 14, 41, 14, 14, 6],
+    [35, 42, 14, 43, -10, 15, 6],
+    [65, 42, 14, 43, 10, 15, 6],
+    [19, 30, 12, 34, -22, 10, 5],
+    [81, 30, 12, 34, 22, 10, 5],
+    [24, 32, 12, 36, -18, 11, 5],
+    [76, 32, 12, 36, 18, 11, 5],
+    [11, 19, 11, 26, -32, 8, 4],
+    [89, 19, 11, 26, 32, 8, 4],
+    [35, 17, 10, 21, -12, 5.5, 3],
+    [65, 17, 10, 21, 12, 5.5, 3],
+], 0.045);
+
+const RAINBOW_SPARKLE_COLUMNS = buildAuraColumns([
+    [20, 60, 4, 4, 0, 8, 5],
+    [80, 55, 5, 5, 0, 12, 5],
+    [15, 35, 4, 4, 0, 10, 5],
+    [85, 25, 6, 6, 0, 14, 5],
+    [50, 70, 4, 4, 0, 10, 5],
+    [30, 10, 5, 5, 0, 12, 5],
+    [70, 8, 4, 4, 0, 8, 5],
+], 0.25);
+
+const RAINBOW_SPARKLE_COLORS = [
+    '#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#ff00ff', '#ff1493'
+];
+
+const RED_SPARKLE_COLUMNS = buildAuraColumns([
+    [20, 60, 4, 4, 0, 8, 5],
+    [80, 55, 5, 5, 0, 12, 5],
+    [15, 35, 4, 4, 0, 10, 5],
+    [85, 25, 6, 6, 0, 14, 5],
+    [50, 70, 4, 4, 0, 10, 5],
+    [30, 10, 5, 5, 0, 12, 5],
+    [70, 8, 4, 4, 0, 8, 5],
+], 0.25);
+
 const AURA_CONFIG = {
     "aura-rage-mode": {
         label: "Rage Mode",
@@ -110,6 +155,27 @@ const AURA_CONFIG = {
     "aura-judgement": {
         label: "Judgement",
         columns: [], // Removed blades as requested
+    },
+    // New auras
+    "aura-red-saiyan": {
+        label: "Red Saiyan",
+        columns: RED_SAIYAN_COLUMNS,
+    },
+    "aura-halo": {
+        label: "Halo",
+        columns: [], // Special halo ring rendering
+    },
+    "aura-void": {
+        label: "Void",
+        columns: [], // Special void particles rendering
+    },
+    "aura-sparkle-rainbow": {
+        label: "Rainbow Sparkle",
+        columns: RAINBOW_SPARKLE_COLUMNS,
+    },
+    "aura-sparkle-red": {
+        label: "Red Sparkle",
+        columns: RED_SPARKLE_COLUMNS,
     },
 };
 
@@ -165,6 +231,26 @@ export default function PlayerCard({
         borderColor = "transparent";
         bgColor = "#050508";
         shadow = "0 18px 48px rgba(0, 0, 0, 0.72), 0 0 32px rgba(0, 245, 255, 0.2)";
+    } else if (player.aura === "aura-red-saiyan") {
+        borderColor = "transparent";
+        bgColor = "#1a0000";
+        shadow = "0 14px 34px rgba(0, 0, 0, 0.6), 0 0 25px rgba(255, 107, 107, 0.12)";
+    } else if (player.aura === "aura-halo") {
+        borderColor = "transparent";
+        bgColor = "#1a1500";
+        shadow = "0 14px 34px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 215, 0, 0.15)";
+    } else if (player.aura === "aura-void") {
+        borderColor = "transparent";
+        bgColor = "#0a001a";
+        shadow = "0 14px 34px rgba(0, 0, 0, 0.7), 0 0 30px rgba(74, 0, 128, 0.18)";
+    } else if (player.aura === "aura-sparkle-rainbow") {
+        borderColor = "transparent";
+        bgColor = "#0a001a";
+        shadow = "0 14px 34px rgba(0, 0, 0, 0.5), 0 0 25px rgba(255, 0, 255, 0.15)";
+    } else if (player.aura === "aura-sparkle-red") {
+        borderColor = "transparent";
+        bgColor = "#1a0000";
+        shadow = "0 14px 34px rgba(0, 0, 0, 0.6), 0 0 22px rgba(255, 107, 107, 0.16)";
     }
 
     const avatarBorderColor = player.aura === "aura-rage-mode"
@@ -175,9 +261,19 @@ export default function PlayerCard({
                 ? "rgba(168, 242, 255, 0.88)"
                 : player.aura === "aura-judgement"
                     ? "#00f5ff"
-                    : isDead
-                        ? "#1a0a2a"
-                        : `${color}bb`;
+                    : player.aura === "aura-red-saiyan"
+                        ? "rgba(255, 107, 107, 0.88)"
+                        : player.aura === "aura-halo"
+                            ? "rgba(255, 215, 0, 0.92)"
+                            : player.aura === "aura-void"
+                                ? "rgba(74, 0, 128, 0.88)"
+                                : player.aura === "aura-sparkle-rainbow"
+                                    ? "rgba(255, 0, 255, 0.88)"
+                                    : player.aura === "aura-sparkle-red"
+                                        ? "rgba(255, 107, 107, 0.88)"
+                                        : isDead
+                                            ? "#1a0a2a"
+                                            : `${color}bb`;
 
     const avatarBackground = player.aura === "aura-rage-mode"
         ? "rgba(255, 255, 255, 0.03)"
@@ -187,7 +283,17 @@ export default function PlayerCard({
                 ? "rgba(136, 218, 255, 0.08)"
                 : player.aura === "aura-judgement"
                     ? "rgba(0, 245, 255, 0.08)"
-                    : `${color}15`;
+                    : player.aura === "aura-red-saiyan"
+                        ? "rgba(255, 107, 107, 0.05)"
+                        : player.aura === "aura-halo"
+                            ? "rgba(255, 215, 0, 0.12)"
+                            : player.aura === "aura-void"
+                                ? "rgba(74, 0, 128, 0.06)"
+                                : player.aura === "aura-sparkle-rainbow"
+                                    ? "rgba(255, 0, 255, 0.06)"
+                                    : player.aura === "aura-sparkle-red"
+                                        ? "rgba(255, 107, 107, 0.05)"
+                                        : `${color}15`;
 
     const avatarShadow = player.aura === "aura-rage-mode"
         ? "0 0 18px rgba(255, 255, 255, 0.12)"
@@ -197,9 +303,19 @@ export default function PlayerCard({
                 ? "0 0 22px rgba(124, 228, 255, 0.22)"
                 : player.aura === "aura-judgement"
                     ? "0 0 26px rgba(0, 245, 255, 0.28)"
-                    : isDead
-                        ? "0 0 20px rgba(255, 0, 0, 0.3), inset 0 0 15px rgba(255, 0, 0, 0.2)"
-                        : `0 4px 14px ${color}44`;
+                    : player.aura === "aura-red-saiyan"
+                        ? "0 0 20px rgba(255, 107, 107, 0.24)"
+                        : player.aura === "aura-halo"
+                            ? "0 0 24px rgba(255, 215, 0, 0.30)"
+                            : player.aura === "aura-void"
+                                ? "0 0 28px rgba(74, 0, 128, 0.32)"
+                                : player.aura === "aura-sparkle-rainbow"
+                                    ? "0 0 26px rgba(255, 0, 255, 0.30)"
+                                    : player.aura === "aura-sparkle-red"
+                                        ? "0 0 22px rgba(255, 107, 107, 0.28)"
+                                        : isDead
+                                            ? "0 0 20px rgba(255, 0, 0, 0.3), inset 0 0 15px rgba(255, 0, 0, 0.2)"
+                                            : `0 4px 14px ${color}44`;
 
     const cardClassName = ["player-card-frame", hasAura ? `has-aura ${player.aura}` : ""]
         .filter(Boolean)
@@ -319,6 +435,38 @@ export default function PlayerCard({
                                     <span className="rage-eye rage-eye--right">
                                         <span className="rage-eye__pupil" />
                                     </span>
+                                </div>
+                            </>
+                        )}
+
+                        {/* New Aura Components - Using blade system instead of custom rendering */}
+                        {player.aura === "aura-halo" && (
+                            <>
+                                {/* Halo ring - special case since no blades */}
+                                <div className="halo-ring" />
+                            </>
+                        )}
+
+                        {player.aura === "aura-void" && (
+                            <>
+                                {/* Void haze - special case since no blades */}
+                                <div className="void-haze" />
+                                {/* Void particles */}
+                                <div className="void-particles">
+                                    {Array.from({ length: 12 }).map((_, i) => (
+                                        <div
+                                            key={i}
+                                            className="void-particle"
+                                            style={{
+                                                position: 'absolute',
+                                                left: `${30 + (i * 5)}%`,
+                                                top: `${20 + (i % 3) * 20}%`,
+                                                '--tx': `${(Math.random() - 0.5) * 40}px`,
+                                                '--ty': `${(Math.random() - 0.5) * 40}px`,
+                                                animationDelay: `${i * 0.3}s`
+                                            }}
+                                        />
+                                    ))}
                                 </div>
                             </>
                         )}
