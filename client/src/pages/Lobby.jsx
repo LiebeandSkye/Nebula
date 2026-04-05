@@ -1,7 +1,7 @@
 /**
  * Lobby.jsx — Create/Join room + waiting room. Fully redesigned.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSocket, useSocketEvent } from "../hooks/useSocket";
 import { clearPlaySession, getOrCreateSessionToken, savePlaySession } from "../lib/sessionPersistence.js";
 import { PROFILES, AVATAR_COLORS } from "../lib/profiles.js";
@@ -65,7 +65,15 @@ function SettingToggle({ label, desc, checked, onChange, onInfo }) {
     );
 }
 
-export default function Lobby({ onReady, resumeFrom }) {
+export default function Lobby({
+    onReady,
+    resumeFrom,
+    onLeaveRoom,
+    musicVolume,
+    setMusicVolume,
+    musicMuted,
+    setMusicMuted,
+}) {
     const { emit, connected } = useSocket();
     const [screen, setScreen] = useState("setup"); // setup | waiting
     const [mode, setMode] = useState("create");
@@ -78,13 +86,46 @@ export default function Lobby({ onReady, resumeFrom }) {
     const [roomId, setRoomId] = useState(null);
     const [myId, setMyId] = useState(null);
     const [lobbyState, setLobbyState] = useState(null);
+    const [musicState, setMusicState] = useState(null);
     const [expandedRole, setExpandedRole] = useState(null);
+    const [musicPanelPosition, setMusicPanelPosition] = useState({ x: null, y: null });
+    const [volumePanelPosition, setVolumePanelPosition] = useState({ x: null, y: null });
     const [settings, setSettings] = useState({
         password: "", hasEngineer: false, hasDoctor: false,
         hasGuardian: false, hasLawyer: false, hasTraitor: false, gnosiaCount: "",
+        lobbyMusicEnabled: true, endGameMusicEnabled: true,
     });
+    const dragStateRef = useRef(null);
+    const volumeDragStateRef = useRef(null);
 
-    useSocketEvent("lobby:updated", ({ state }) => setLobbyState(state));
+    function syncSettingsFromState(state) {
+        if (!state?.settings) return;
+        setSettings(prev => ({
+            ...prev,
+            hasEngineer: !!state.settings.hasEngineer,
+            hasDoctor: !!state.settings.hasDoctor,
+            hasGuardian: !!state.settings.hasGuardian,
+            hasLawyer: !!state.settings.hasLawyer,
+            hasTraitor: !!state.settings.hasTraitor,
+            gnosiaCount: state.settings.gnosiaCount ?? "",
+            lobbyMusicEnabled: state.settings.lobbyMusicEnabled !== false,
+            endGameMusicEnabled: state.settings.endGameMusicEnabled !== false,
+        }));
+        if (state.music) {
+            setMusicState({
+                settings: {
+                    lobbyMusicEnabled: state.settings.lobbyMusicEnabled !== false,
+                    endGameMusicEnabled: state.settings.endGameMusicEnabled !== false,
+                },
+                playback: state.music.playback,
+            });
+        }
+    }
+
+    useSocketEvent("lobby:updated", ({ state }) => {
+        setLobbyState(state);
+        syncSettingsFromState(state);
+    });
     useSocketEvent("lobby:hostChanged", ({ newHostId }) => {
         setLobbyState(prev => prev ? {
             ...prev,
@@ -92,12 +133,14 @@ export default function Lobby({ onReady, resumeFrom }) {
         } : prev);
     });
     useSocketEvent("game:starting", () => setLoading(true));
+    useSocketEvent("music:state", (payload) => setMusicState(payload));
 
     useEffect(() => {
         if (!resumeFrom?.lobbyState || !resumeFrom.roomId || !resumeFrom.myId) return;
         setRoomId(resumeFrom.roomId);
         setMyId(resumeFrom.myId);
         setLobbyState(resumeFrom.lobbyState);
+        syncSettingsFromState(resumeFrom.lobbyState);
         setScreen("waiting");
     }, [resumeFrom]);
 
@@ -121,12 +164,15 @@ export default function Lobby({ onReady, resumeFrom }) {
                 hasLawyer: settings.hasLawyer,
                 hasTraitor: settings.hasTraitor,
                 gnosiaCount: settings.gnosiaCount ? parseInt(settings.gnosiaCount) : null,
+                lobbyMusicEnabled: settings.lobbyMusicEnabled,
+                endGameMusicEnabled: settings.endGameMusicEnabled,
             },
         });
         setLoading(false);
         if (!res.success) return setError(res.error);
         const me = res.state.players.find(p => p.username === username.trim());
         setMyId(me?.id); setRoomId(res.roomId); setLobbyState(res.state);
+        syncSettingsFromState(res.state);
         savePlaySession({
             sessionToken,
             roomId: res.roomId,
@@ -155,6 +201,7 @@ export default function Lobby({ onReady, resumeFrom }) {
         const me = res.state.players.find(p => p.username === username.trim());
         const rid = joinCode.trim().toUpperCase();
         setMyId(me?.id); setRoomId(rid); setLobbyState(res.state);
+        syncSettingsFromState(res.state);
         savePlaySession({
             sessionToken,
             roomId: rid,
@@ -178,6 +225,8 @@ export default function Lobby({ onReady, resumeFrom }) {
                 hasLawyer: next.hasLawyer,
                 hasTraitor: next.hasTraitor,
                 gnosiaCount: next.gnosiaCount ? parseInt(next.gnosiaCount) : null,
+                lobbyMusicEnabled: next.lobbyMusicEnabled,
+                endGameMusicEnabled: next.endGameMusicEnabled,
             },
         });
     }
@@ -195,9 +244,80 @@ export default function Lobby({ onReady, resumeFrom }) {
         if (!res.success) { setError(res.error); setLoading(false); }
     }
 
+    async function playSharedMusic() {
+        if (!roomId) return;
+        const res = await emit("music:play", { roomId });
+        if (!res?.success) setError(res?.error || "Failed to start music.");
+    }
+
+    function startMusicPanelDrag(event) {
+        if (event.target.closest("button, input, label")) return;
+        const panelRect = event.currentTarget.parentElement.getBoundingClientRect();
+        dragStateRef.current = {
+            offsetX: event.clientX - panelRect.left,
+            offsetY: event.clientY - panelRect.top,
+        };
+        event.preventDefault();
+    }
+
+    function startVolumePanelDrag(event) {
+        if (event.target.closest("button, input")) return;
+        const panelRect = event.currentTarget.getBoundingClientRect();
+        volumeDragStateRef.current = {
+            offsetX: event.clientX - panelRect.left,
+            offsetY: event.clientY - panelRect.top,
+        };
+        event.preventDefault();
+    }
+
+    useEffect(() => {
+        function handlePointerMove(event) {
+            if (dragStateRef.current) {
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+                const panelWidth = 360;
+                const panelHeight = 260;
+                const nextX = Math.min(Math.max(12, event.clientX - dragStateRef.current.offsetX), Math.max(12, width - panelWidth - 12));
+                const nextY = Math.min(Math.max(12, event.clientY - dragStateRef.current.offsetY), Math.max(12, height - panelHeight - 12));
+                setMusicPanelPosition({ x: nextX, y: nextY });
+            }
+            if (volumeDragStateRef.current) {
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+                const panelWidth = 260;
+                const panelHeight = 120;
+                const nextX = Math.min(Math.max(12, event.clientX - volumeDragStateRef.current.offsetX), Math.max(12, width - panelWidth - 12));
+                const nextY = Math.min(Math.max(12, event.clientY - volumeDragStateRef.current.offsetY), Math.max(12, height - panelHeight - 12));
+                setVolumePanelPosition({ x: nextX, y: nextY });
+            }
+        }
+
+        function stopDrag() {
+            dragStateRef.current = null;
+            volumeDragStateRef.current = null;
+        }
+
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", stopDrag);
+        window.addEventListener("pointercancel", stopDrag);
+
+        return () => {
+            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointerup", stopDrag);
+            window.removeEventListener("pointercancel", stopDrag);
+        };
+    }, []);
+
     // ── WAITING ROOM ──────────────────────────────────────────────────
     if (screen === "waiting") {
         const playerCount = lobbyState?.players.length || 0;
+        const nowPlayingLabel = musicState?.playback?.trackKey === "lobby"
+            ? "LOBBY MUSIC"
+            : musicState?.playback?.trackKey === "humanWin"
+                ? "HUMAN WIN"
+                : musicState?.playback?.trackKey === "gnosiaWin"
+                    ? "GNOSIA WIN"
+                    : "OFF";
         return (
             <div className="crt star-bg" style={{
                 minHeight: "100vh", display: "flex", flexDirection: "column",
@@ -362,6 +482,8 @@ export default function Lobby({ onReady, resumeFrom }) {
                                     { key: "hasGuardian", label: "GUARDIAN ANGEL", role: "guardian" },
                                     { key: "hasLawyer", label: "LAWYER", role: "lawyer" },
                                     { key: "hasTraitor", label: "TRAITOR", role: "traitor" },
+                                    { key: "lobbyMusicEnabled", label: "LOBBY MUSIC", role: null },
+                                    { key: "endGameMusicEnabled", label: "END GAME MUSIC", role: null },
                                 ].map(({ key, label, role }) => (
                                     <div key={key}>
                                         <div style={{
@@ -372,17 +494,19 @@ export default function Lobby({ onReady, resumeFrom }) {
                                         }}>
                                             <span style={{ color: "#4a3060" }}>{label}</span>
                                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                <button onClick={() => setExpandedRole(r => r === role ? null : role)} style={{
-                                                    fontSize: 8, color: "#4a3060", border: "1px solid #2a1a4a",
-                                                    background: "transparent", padding: "2px 7px",
-                                                    cursor: "pointer", fontFamily: "Press Start 2P",
-                                                }}>?</button>
+                                                {role && (
+                                                    <button onClick={() => setExpandedRole(r => r === role ? null : role)} style={{
+                                                        fontSize: 8, color: "#4a3060", border: "1px solid #2a1a4a",
+                                                        background: "transparent", padding: "2px 7px",
+                                                        cursor: "pointer", fontFamily: "Press Start 2P",
+                                                    }}>?</button>
+                                                )}
                                                 <span style={{ color: lobbyState?.settings[key] ? "#00f5ff" : "#2a1a3a" }}>
                                                     {lobbyState?.settings[key] ? "ON" : "OFF"}
                                                 </span>
                                             </div>
                                         </div>
-                                        {expandedRole === role && (
+                                        {role && expandedRole === role && (
                                             <div style={{ fontSize: 8, color: "#6a5080", lineHeight: 1.8, padding: "8px 0 12px", borderBottom: "1px solid #1a0a2a" }}>
                                                 {ROLE_DESCRIPTIONS[role]}
                                             </div>
@@ -434,7 +558,9 @@ export default function Lobby({ onReady, resumeFrom }) {
                                         setRoomId(null);
                                         setMyId(null);
                                         setLobbyState(null);
+                                        setMusicState(null);
                                         setScreen("setup");
+                                        onLeaveRoom?.();
                                     });
                                 }
                             }}>
@@ -442,6 +568,187 @@ export default function Lobby({ onReady, resumeFrom }) {
                         </button>
                     </div>
                 </div>
+                {amHost && (
+                    <div style={{
+                        position: "fixed",
+                        right: musicPanelPosition.x === null ? 24 : "auto",
+                        bottom: musicPanelPosition.y === null ? 24 : "auto",
+                        left: musicPanelPosition.x === null ? "auto" : musicPanelPosition.x,
+                        top: musicPanelPosition.y === null ? "auto" : musicPanelPosition.y,
+                        width: "min(360px, calc(100vw - 32px))",
+                        border: "1px solid #00f5ff44",
+                        background: "linear-gradient(180deg, rgba(7,0,15,0.96), rgba(19,0,37,0.96))",
+                        boxShadow: "0 0 0 1px rgba(0,245,255,0.08), 0 0 28px rgba(0,245,255,0.12)",
+                        padding: 18,
+                        zIndex: 10,
+                    }}>
+                        <div
+                            onPointerDown={startMusicPanelDrag}
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 12,
+                                marginBottom: 10,
+                                cursor: "grab",
+                                userSelect: "none",
+                                touchAction: "none",
+                            }}>
+                            <div>
+                                <div style={{ fontSize: 8, color: "#4a3060", letterSpacing: "0.18em", marginBottom: 6 }}>
+                                    SHARED MUSIC CONTROL
+                                </div>
+                                <div style={{ fontSize: 11, color: "#00f5ff", textShadow: "0 0 12px rgba(0,245,255,0.35)" }}>
+                                    {nowPlayingLabel}
+                                </div>
+                            </div>
+                            <div style={{
+                                padding: "6px 10px",
+                                border: "1px solid #00f5ff33",
+                                background: "rgba(0,245,255,0.06)",
+                                color: "#8ef7ff",
+                                fontSize: 7,
+                                letterSpacing: "0.12em",
+                            }}>
+                                DRAG
+                            </div>
+                        </div>
+                        <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(0,245,255,0.75), transparent)", marginBottom: 12 }} />
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            <label style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 14,
+                                padding: "10px 12px",
+                                border: "1px solid #1f2d4d",
+                                background: "rgba(0,0,0,0.25)",
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: 9, color: "#e0d4ff", marginBottom: 4 }}>LOBBY MUSIC</div>
+                                    <div style={{ fontSize: 7, color: "#5d5f86", lineHeight: 1.8 }}>Synced room track while everyone waits in lobby.</div>
+                                </div>
+                                <input type="checkbox" className="toggle" checked={settings.lobbyMusicEnabled}
+                                    onChange={e => changeSetting("lobbyMusicEnabled", e.target.checked)} />
+                            </label>
+                            <label style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 14,
+                                padding: "10px 12px",
+                                border: "1px solid #1f2d4d",
+                                background: "rgba(0,0,0,0.25)",
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: 9, color: "#e0d4ff", marginBottom: 4 }}>END GAME MUSIC</div>
+                                    <div style={{ fontSize: 7, color: "#5d5f86", lineHeight: 1.8 }}>Play Human or Gnosia victory music after the match.</div>
+                                </div>
+                                <input type="checkbox" className="toggle" checked={settings.endGameMusicEnabled}
+                                    onChange={e => changeSetting("endGameMusicEnabled", e.target.checked)} />
+                            </label>
+                            <button
+                                className="btn"
+                                style={{
+                                    width: "100%",
+                                    background: settings.lobbyMusicEnabled ? "rgba(0,245,255,0.1)" : "rgba(42,26,74,0.4)",
+                                    borderColor: settings.lobbyMusicEnabled ? "#00f5ff55" : "#2a1a4a",
+                                    color: settings.lobbyMusicEnabled ? "#00f5ff" : "#4a3060",
+                                }}
+                                onClick={playSharedMusic}
+                                disabled={!settings.lobbyMusicEnabled}>
+                                PLAY MUSIC
+                            </button>
+                            <div style={{
+                                padding: "12px",
+                                border: "1px solid #1f2d4d",
+                                background: "rgba(0,0,0,0.25)",
+                            }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                                    <div>
+                                        <div style={{ fontSize: 9, color: "#e0d4ff", marginBottom: 4 }}>YOUR VOLUME</div>
+                                        <div style={{ fontSize: 7, color: "#5d5f86" }}>Applies only to your device.</div>
+                                    </div>
+                                    <button
+                                        className="btn-topbar"
+                                        onClick={() => setMusicMuted(!musicMuted)}
+                                        style={{ borderColor: "#00f5ff44", color: musicMuted ? "#8a7aa0" : "#00f5ff" }}>
+                                        {musicMuted ? "UNMUTE" : "MUTE"}
+                                    </button>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={Math.round(musicVolume * 100)}
+                                    onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
+                                    style={{ width: "100%", accentColor: "#00f5ff" }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {!amHost && (
+                    <div
+                        onPointerDown={startVolumePanelDrag}
+                        style={{
+                            position: "fixed",
+                            right: volumePanelPosition.x === null ? 24 : "auto",
+                            bottom: volumePanelPosition.y === null ? 24 : "auto",
+                            left: volumePanelPosition.x === null ? "auto" : volumePanelPosition.x,
+                            top: volumePanelPosition.y === null ? "auto" : volumePanelPosition.y,
+                            width: "min(260px, calc(100vw - 32px))",
+                            border: "1px solid #00f5ff33",
+                            background: "linear-gradient(180deg, rgba(7,0,15,0.94), rgba(13,0,32,0.94))",
+                            boxShadow: "0 0 18px rgba(0,245,255,0.1)",
+                            padding: 14,
+                            zIndex: 10,
+                        }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 12,
+                                marginBottom: 10,
+                                cursor: "grab",
+                                userSelect: "none",
+                                touchAction: "none",
+                            }}>
+                            <div style={{ fontSize: 8, color: "#4a3060", letterSpacing: "0.16em" }}>
+                                YOUR MUSIC VOLUME
+                            </div>
+                            <div style={{
+                                padding: "4px 8px",
+                                border: "1px solid #00f5ff33",
+                                background: "rgba(0,245,255,0.06)",
+                                color: "#8ef7ff",
+                                fontSize: 6,
+                                letterSpacing: "0.1em",
+                            }}>
+                                DRAG
+                            </div>
+                        </div>
+                        <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(0,245,255,0.75), transparent)", marginBottom: 12 }} />
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+                            <span style={{ fontSize: 9, color: "#00f5ff" }}>{musicMuted ? "MUTED" : `${Math.round(musicVolume * 100)}%`}</span>
+                            <button
+                                className="btn-topbar"
+                                onClick={() => setMusicMuted(!musicMuted)}
+                                style={{ borderColor: "#00f5ff44", color: musicMuted ? "#8a7aa0" : "#00f5ff" }}>
+                                {musicMuted ? "UNMUTE" : "MUTE"}
+                            </button>
+                        </div>
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={Math.round(musicVolume * 100)}
+                            onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
+                            style={{ width: "100%", accentColor: "#00f5ff" }}
+                        />
+                    </div>
+                )}
             </div>
         );
     }

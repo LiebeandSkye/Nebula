@@ -15,6 +15,7 @@
  */
 
 const { resetNightFlags } = require("./gameState");
+const MUSIC_TRANSITION_MS = 1500;
 
 // ── Phase durations (ms) ────────────────────────────────────────────
 const PHASE_DURATIONS = {
@@ -287,8 +288,8 @@ function resolveVote(gameState) {
     if (target) {
         target.alive = false;
         target.inColdSleep = true;
-        target.rollsRemaining = 2; // Give 2 rolls when voted out
-        console.log(`[DEATH] ${target.username} voted out, given 2 rolls`);
+        target.rollsRemaining = 1;
+        console.log(`[DEATH] ${target.username} voted out, given 1 roll`);
         gameState.morningReport.coldSleep = topId;
         console.log(`[FSM] ${target.username} voted into Cold Sleep (${topVotes} votes)`);
     }
@@ -378,6 +379,7 @@ function checkWin(gameState) {
         winner,
         players: roleReveal,
     });
+    playEndGameMusic(gameState, winner);
 
     return true;
 }
@@ -401,6 +403,8 @@ function forceAdvance(gameState, socketId) {
 }
 
 function resetToLobby(gameState) {
+    const playback = ensureMusicState(gameState);
+    const hadActiveTrack = !!playback.trackKey;
     clearRoomTimer(gameState.roomId);
     clearPendingGameStart(gameState.roomId);
     const meta = ensureMeta(gameState);
@@ -426,6 +430,15 @@ function resetToLobby(gameState) {
         p.rollsRemaining = 0;
     });
     resetNightFlags(gameState);
+    if (gameState.settings.lobbyMusicEnabled === false) {
+        stopRoomMusic(gameState, hadActiveTrack ? MUSIC_TRANSITION_MS : 0);
+    } else {
+        syncLobbyMusic(gameState, {
+            forceRestart: true,
+            delayMs: hadActiveTrack ? MUSIC_TRANSITION_MS : 0,
+            transitionDurationMs: hadActiveTrack ? MUSIC_TRANSITION_MS : 0,
+        });
+    }
     
     broadcastToRoom(gameState.roomId, "phase:changed", buildPhasePayload(gameState));
     console.log(`[FSM] Room ${gameState.roomId} reset to LOBBY`);
@@ -449,6 +462,115 @@ function clearRoomTimer(roomId) {
         clearTimeout(activeTimers.get(roomId));
         activeTimers.delete(roomId);
     }
+}
+
+function ensureMusicState(gameState) {
+    if (!gameState.settings) gameState.settings = {};
+    if (typeof gameState.settings.lobbyMusicEnabled !== "boolean") {
+        gameState.settings.lobbyMusicEnabled = true;
+    }
+    if (typeof gameState.settings.endGameMusicEnabled !== "boolean") {
+        gameState.settings.endGameMusicEnabled = true;
+    }
+    if (!gameState.musicPlayback || typeof gameState.musicPlayback !== "object") {
+        gameState.musicPlayback = {
+            trackKey: null,
+            startedAt: null,
+            loop: false,
+            transitionDurationMs: 0,
+            revision: 0,
+            updatedAt: Date.now(),
+        };
+    }
+    if (typeof gameState.musicPlayback.revision !== "number") {
+        gameState.musicPlayback.revision = 0;
+    }
+    return gameState.musicPlayback;
+}
+
+function buildMusicPayload(gameState) {
+    const playback = ensureMusicState(gameState);
+    return {
+        settings: {
+            lobbyMusicEnabled: gameState.settings.lobbyMusicEnabled !== false,
+            endGameMusicEnabled: gameState.settings.endGameMusicEnabled !== false,
+        },
+        playback: {
+            trackKey: playback.trackKey || null,
+            startedAt: playback.startedAt || null,
+            loop: !!playback.loop,
+            transitionDurationMs: playback.transitionDurationMs || 0,
+            revision: playback.revision || 0,
+            updatedAt: playback.updatedAt || null,
+        },
+        serverNow: Date.now(),
+    };
+}
+
+function broadcastMusicState(gameState) {
+    broadcastToRoom(gameState.roomId, "music:state", buildMusicPayload(gameState));
+}
+
+function setMusicPlayback(gameState, {
+    trackKey = null,
+    startedAt = null,
+    loop = false,
+    transitionDurationMs = 0,
+} = {}) {
+    const playback = ensureMusicState(gameState);
+    playback.trackKey = trackKey;
+    playback.startedAt = startedAt;
+    playback.loop = !!loop;
+    playback.transitionDurationMs = transitionDurationMs;
+    playback.revision += 1;
+    playback.updatedAt = Date.now();
+    broadcastMusicState(gameState);
+}
+
+function stopRoomMusic(gameState, transitionDurationMs = MUSIC_TRANSITION_MS) {
+    setMusicPlayback(gameState, {
+        trackKey: null,
+        startedAt: null,
+        loop: false,
+        transitionDurationMs,
+    });
+}
+
+function syncLobbyMusic(gameState, {
+    forceRestart = false,
+    delayMs = 0,
+    transitionDurationMs = 0,
+} = {}) {
+    const playback = ensureMusicState(gameState);
+    if (gameState.settings.lobbyMusicEnabled === false) {
+        stopRoomMusic(gameState, transitionDurationMs || MUSIC_TRANSITION_MS);
+        return;
+    }
+
+    if (!forceRestart && playback.trackKey === "lobby" && gameState.phase === "LOBBY" && delayMs === 0) {
+        return;
+    }
+
+    setMusicPlayback(gameState, {
+        trackKey: "lobby",
+        startedAt: Date.now() + delayMs,
+        loop: true,
+        transitionDurationMs,
+    });
+}
+
+function playEndGameMusic(gameState, winner, transitionDurationMs = MUSIC_TRANSITION_MS) {
+    if (gameState.settings.endGameMusicEnabled === false) {
+        stopRoomMusic(gameState, transitionDurationMs);
+        return;
+    }
+
+    setMusicPlayback(gameState, {
+        trackKey: winner === "humans" ? "humanWin" : "gnosiaWin",
+        startedAt: Date.now() + transitionDurationMs,
+        loop: true,
+        transitionDurationMs,
+    });
 }
 
 /**
@@ -525,4 +647,10 @@ module.exports = {
     broadcastPhase,
     buildPhasePayload,
     PHASE_DURATIONS,
+    MUSIC_TRANSITION_MS,
+    buildMusicPayload,
+    broadcastMusicState,
+    syncLobbyMusic,
+    stopRoomMusic,
+    playEndGameMusic,
 };

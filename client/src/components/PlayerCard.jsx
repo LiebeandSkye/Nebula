@@ -183,11 +183,15 @@ export default function PlayerCard({
     player, isMe, isSelected, canSelect, onSelect,
     phase, myRole, gnosiaAllies = [],
     voteBreakdown = {}, allPlayers = [], compact = false,
+    auraVisibility = "all",
 }) {
     const color = AVATAR_COLORS[player.profileId] || "#c8b8ff";
     const isAlly = gnosiaAllies.includes(player.id);
     const isDead = !player.alive;
-    const aura = AURA_CONFIG[player.aura] || null;
+    const auraKey = auraVisibility === "all" || (auraVisibility === "self" && isMe)
+        ? player.aura
+        : null;
+    const aura = AURA_CONFIG[auraKey] || null;
     const hasAura = Boolean(aura);
     const avatarSize = compact ? 48 : 76;
     const auraScale = compact ? 0.78 : 1;
@@ -207,121 +211,121 @@ export default function PlayerCard({
                 : canSelect && !isDead ? `0 0 10px ${color}22`
                     : "none";
 
-    if (player.aura === "aura-rage-mode") {
+    if (auraKey === "aura-rage-mode") {
         borderColor = "transparent";
         bgColor = "#09090c";
         shadow = "0 14px 34px rgba(0, 0, 0, 0.6), 0 0 16px rgba(255, 255, 255, 0.08)";
-    } else if (player.aura === "aura-golden-saiyan") {
+    } else if (auraKey === "aura-golden-saiyan") {
         borderColor = "transparent";
         bgColor = "#171003";
         shadow = "0 14px 34px rgba(0, 0, 0, 0.56), 0 0 24px rgba(255, 215, 0, 0.14)";
-    } else if (player.aura === "aura-glacier") {
+    } else if (auraKey === "aura-glacier") {
         borderColor = "transparent";
         bgColor = "#071320";
         shadow = "0 14px 34px rgba(0, 0, 0, 0.56), 0 0 22px rgba(119, 222, 255, 0.16)";
-    } else if (player.aura === "aura-sunset") {
+    } else if (auraKey === "aura-sunset") {
         borderColor = "transparent";
         bgColor = "#1a0800";
         shadow = "0 0 20px rgba(255, 69, 0, 0.22)";
-    } else if (player.aura === "aura-glitch") {
+    } else if (auraKey === "aura-glitch") {
         borderColor = "transparent";
         bgColor = "#020202";
         shadow = "0 0 16px rgba(0, 255, 0, 0.12)";
-    } else if (player.aura === "aura-judgement") {
+    } else if (auraKey === "aura-judgement") {
         borderColor = "transparent";
         bgColor = "#050508";
         shadow = "0 18px 48px rgba(0, 0, 0, 0.72), 0 0 32px rgba(0, 245, 255, 0.2)";
-    } else if (player.aura === "aura-red-saiyan") {
+    } else if (auraKey === "aura-red-saiyan") {
         borderColor = "transparent";
         bgColor = "#1a0000";
         shadow = "0 14px 34px rgba(0, 0, 0, 0.6), 0 0 25px rgba(255, 107, 107, 0.12)";
-    } else if (player.aura === "aura-halo") {
+    } else if (auraKey === "aura-halo") {
         borderColor = "transparent";
         bgColor = "#1a1500";
         shadow = "0 14px 34px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 215, 0, 0.15)";
-    } else if (player.aura === "aura-void") {
+    } else if (auraKey === "aura-void") {
         borderColor = "transparent";
         bgColor = "#0a001a";
         shadow = "0 14px 34px rgba(0, 0, 0, 0.7), 0 0 30px rgba(74, 0, 128, 0.18)";
-    } else if (player.aura === "aura-sparkle-rainbow") {
+    } else if (auraKey === "aura-sparkle-rainbow") {
         borderColor = "transparent";
         bgColor = "#0a001a";
         shadow = "0 14px 34px rgba(0, 0, 0, 0.5), 0 0 25px rgba(255, 0, 255, 0.15)";
-    } else if (player.aura === "aura-sparkle-red") {
+    } else if (auraKey === "aura-sparkle-red") {
         borderColor = "transparent";
         bgColor = "#1a0000";
         shadow = "0 14px 34px rgba(0, 0, 0, 0.6), 0 0 22px rgba(255, 107, 107, 0.16)";
     }
 
-    const avatarBorderColor = player.aura === "aura-rage-mode"
+    const avatarBorderColor = auraKey === "aura-rage-mode"
         ? "rgba(255, 255, 255, 0.82)"
-        : player.aura === "aura-golden-saiyan"
+        : auraKey === "aura-golden-saiyan"
             ? "rgba(255, 216, 94, 0.88)"
-            : player.aura === "aura-glacier"
+            : auraKey === "aura-glacier"
                 ? "rgba(168, 242, 255, 0.88)"
-                : player.aura === "aura-judgement"
+                : auraKey === "aura-judgement"
                     ? "#00f5ff"
-                    : player.aura === "aura-red-saiyan"
+                    : auraKey === "aura-red-saiyan"
                         ? "rgba(255, 107, 107, 0.88)"
-                        : player.aura === "aura-halo"
+                        : auraKey === "aura-halo"
                             ? "rgba(255, 215, 0, 0.92)"
-                            : player.aura === "aura-void"
+                            : auraKey === "aura-void"
                                 ? "rgba(74, 0, 128, 0.88)"
-                                : player.aura === "aura-sparkle-rainbow"
+                                : auraKey === "aura-sparkle-rainbow"
                                     ? "rgba(255, 0, 255, 0.88)"
-                                    : player.aura === "aura-sparkle-red"
+                                    : auraKey === "aura-sparkle-red"
                                         ? "rgba(255, 107, 107, 0.88)"
                                         : isDead
                                             ? "#1a0a2a"
                                             : `${color}bb`;
 
-    const avatarBackground = player.aura === "aura-rage-mode"
+    const avatarBackground = auraKey === "aura-rage-mode"
         ? "rgba(255, 255, 255, 0.03)"
-        : player.aura === "aura-golden-saiyan"
+        : auraKey === "aura-golden-saiyan"
             ? "rgba(255, 215, 0, 0.1)"
-            : player.aura === "aura-glacier"
+            : auraKey === "aura-glacier"
                 ? "rgba(136, 218, 255, 0.08)"
-                : player.aura === "aura-judgement"
+                : auraKey === "aura-judgement"
                     ? "rgba(0, 245, 255, 0.08)"
-                    : player.aura === "aura-red-saiyan"
+                    : auraKey === "aura-red-saiyan"
                         ? "rgba(255, 107, 107, 0.05)"
-                        : player.aura === "aura-halo"
+                        : auraKey === "aura-halo"
                             ? "rgba(255, 215, 0, 0.12)"
-                            : player.aura === "aura-void"
+                            : auraKey === "aura-void"
                                 ? "rgba(74, 0, 128, 0.06)"
-                                : player.aura === "aura-sparkle-rainbow"
+                                : auraKey === "aura-sparkle-rainbow"
                                     ? "rgba(255, 0, 255, 0.06)"
-                                    : player.aura === "aura-sparkle-red"
+                                    : auraKey === "aura-sparkle-red"
                                         ? "rgba(255, 107, 107, 0.05)"
                                         : `${color}15`;
 
-    const avatarShadow = player.aura === "aura-rage-mode"
+    const avatarShadow = auraKey === "aura-rage-mode"
         ? "0 0 18px rgba(255, 255, 255, 0.12)"
-        : player.aura === "aura-golden-saiyan"
+        : auraKey === "aura-golden-saiyan"
             ? "0 0 22px rgba(255, 215, 0, 0.26)"
-            : player.aura === "aura-glacier"
+            : auraKey === "aura-glacier"
                 ? "0 0 22px rgba(124, 228, 255, 0.22)"
-                : player.aura === "aura-judgement"
+                : auraKey === "aura-judgement"
                     ? "0 0 26px rgba(0, 245, 255, 0.28)"
-                    : player.aura === "aura-red-saiyan"
+                    : auraKey === "aura-red-saiyan"
                         ? "0 0 20px rgba(255, 107, 107, 0.24)"
-                        : player.aura === "aura-halo"
+                        : auraKey === "aura-halo"
                             ? "0 0 24px rgba(255, 215, 0, 0.30)"
-                            : player.aura === "aura-void"
+                            : auraKey === "aura-void"
                                 ? "0 0 28px rgba(74, 0, 128, 0.32)"
-                                : player.aura === "aura-sparkle-rainbow"
+                                : auraKey === "aura-sparkle-rainbow"
                                     ? "0 0 26px rgba(255, 0, 255, 0.30)"
-                                    : player.aura === "aura-sparkle-red"
+                                    : auraKey === "aura-sparkle-red"
                                         ? "0 0 22px rgba(255, 107, 107, 0.28)"
                                         : isDead
                                             ? "0 0 20px rgba(255, 0, 0, 0.3), inset 0 0 15px rgba(255, 0, 0, 0.2)"
                                             : `0 4px 14px ${color}44`;
 
-    const cardClassName = ["player-card-frame", hasAura ? `has-aura ${player.aura}` : ""]
+    const cardClassName = ["player-card-frame", hasAura ? `has-aura ${auraKey}` : ""]
         .filter(Boolean)
         .join(" ");
 
-    const avatarClassName = ["avatar-shell", hasAura ? `avatar-aura ${player.aura}` : ""]
+    const avatarClassName = ["avatar-shell", hasAura ? `avatar-aura ${auraKey}` : ""]
         .filter(Boolean)
         .join(" ");
 
@@ -402,7 +406,7 @@ export default function PlayerCard({
                                 <div className="avatar-aura-core" />
                                 {aura.columns.map((column, index) => (
                                     <span
-                                        key={`${player.aura}-${index}`}
+                                        key={`${auraKey}-${index}`}
                                         className="aura-column"
                                         style={{
                                             left: `${column.left}%`,
@@ -421,11 +425,11 @@ export default function PlayerCard({
                                         />
                                     </span>
                                 ))}
-                                {player.aura === "aura-glacier" && <div className="glacier-haze" />}
+                                {auraKey === "aura-glacier" && <div className="glacier-haze" />}
                             </div>
                         )}
 
-                        {player.aura === "aura-rage-mode" && (
+                        {auraKey === "aura-rage-mode" && (
                             <>
                                 <div className="rage-face-mask" aria-hidden="true" />
                                 <div className="rage-eyes" aria-hidden="true">
@@ -440,14 +444,14 @@ export default function PlayerCard({
                         )}
 
                         {/* New Aura Components - Using blade system instead of custom rendering */}
-                        {player.aura === "aura-halo" && (
+                        {auraKey === "aura-halo" && (
                             <>
                                 {/* Halo ring - special case since no blades */}
                                 <div className="halo-ring" />
                             </>
                         )}
 
-                        {player.aura === "aura-void" && (
+                        {auraKey === "aura-void" && (
                             <>
                                 {/* Void haze - special case since no blades */}
                                 <div className="void-haze" />
@@ -471,7 +475,7 @@ export default function PlayerCard({
                             </>
                         )}
 
-                        {player.aura === "aura-judgement" && (
+                        {auraKey === "aura-judgement" && (
                             <>
                                 {/* Void veil — drowns avatar in darkness */}
                                 <div className="j-veil" aria-hidden="true" />
@@ -506,14 +510,14 @@ export default function PlayerCard({
                             </>
                         )}
 
-                        {player.aura === "aura-glitch" && (
+                        {auraKey === "aura-glitch" && (
                             <div className="aura-glitch-overlay" aria-hidden="true">
                                 <div className="aura-glitch-text">404</div>
                                 <div className="aura-glitch-crack" />
                             </div>
                         )}
 
-                        {player.aura === "aura-golden-saiyan" && (
+                        {auraKey === "aura-golden-saiyan" && (
                             <div className="golden-crown" aria-hidden="true">
                                 <span className="golden-crown__base" />
                                 <span className="golden-crown__point golden-crown__point--left" />

@@ -18,6 +18,22 @@ const nightResolver = require("./game/nightResolver");
 
 const app = express();
 const httpServer = http.createServer(app);
+const AURA_ROLL_OPTIONS = [
+    "aura-rage-mode",
+    "aura-golden-saiyan",
+    "aura-glacier",
+    "aura-sunset",
+    "aura-glitch",
+    "aura-sparkle-white",
+    "aura-sparkle-yellow",
+    "aura-sparkle-pink",
+    "aura-judgement",
+    "aura-red-saiyan",
+    "aura-halo",
+    "aura-void",
+    "aura-sparkle-rainbow",
+    "aura-sparkle-red",
+];
 
 // Always-safe origin allowlist: never blocks prod even if env var is missing.
 const ALLOWED_ORIGINS = [
@@ -94,7 +110,9 @@ io.on("connection", (socket) => {
         if (!result.success) return reply(cb, { success: false, error: result.error });
         socket.join(result.roomId);
         socket.join(`${result.roomId}:lobby`);
+        const gs = getRoom(result.roomId);
         reply(cb, { success: true, roomId: result.roomId, state: result.state });
+        if (gs) stateMachine.broadcastMusicState(gs);
     });
 
     bindAckHandler("room:join", ({ roomId, username, profileId, password, sessionToken }, cb) => {
@@ -104,13 +122,62 @@ io.on("connection", (socket) => {
         socket.join(`${roomId}:lobby`);
         reply(cb, { success: true, state: result.state });
         io.to(`${roomId}:lobby`).emit("lobby:updated", { state: result.state });
+        const gs = getRoom(roomId);
+        if (gs) stateMachine.broadcastMusicState(gs);
     });
 
     bindAckHandler("room:updateSettings", ({ roomId, settings }, cb) => {
         const result = updateSettings(socket.id, roomId, settings);
         if (!result.success) return reply(cb, { success: false, error: result.error });
-        reply(cb, { success: true, state: result.state });
-        io.to(`${roomId}:lobby`).emit("lobby:updated", { state: result.state });
+        const gs = getRoom(roomId);
+        if (gs) {
+            if (gs.phase === "LOBBY") {
+                if (gs.settings.lobbyMusicEnabled === false) {
+                    stateMachine.stopRoomMusic(gs, stateMachine.MUSIC_TRANSITION_MS);
+                } else {
+                    stateMachine.syncLobbyMusic(gs);
+                }
+            } else if (gs.phase === "END") {
+                if (gs.settings.endGameMusicEnabled === false) {
+                    stateMachine.stopRoomMusic(gs, stateMachine.MUSIC_TRANSITION_MS);
+                } else if (!gs.musicPlayback?.trackKey && gs.winner) {
+                    stateMachine.playEndGameMusic(gs, gs.winner, stateMachine.MUSIC_TRANSITION_MS);
+                }
+            } else {
+                stateMachine.broadcastMusicState(gs);
+            }
+        }
+        const nextState = gs ? sanitizeStateForLobby(gs) : result.state;
+        reply(cb, { success: true, state: nextState });
+        io.to(`${roomId}:lobby`).emit("lobby:updated", { state: nextState });
+    });
+
+    bindAckHandler("music:play", ({ roomId }, cb) => {
+        const gs = getRoom(roomId);
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        const host = gs.players.find(p => p.id === socket.id);
+        if (!host || !host.isHost) return reply(cb, { success: false, error: "Only host can control music." });
+
+        if (gs.phase === "LOBBY") {
+            if (gs.settings.lobbyMusicEnabled === false) {
+                return reply(cb, { success: false, error: "Enable lobby music first." });
+            }
+            stateMachine.syncLobbyMusic(gs, { forceRestart: true });
+            return reply(cb, { success: true });
+        }
+
+        if (gs.phase === "END") {
+            if (gs.settings.endGameMusicEnabled === false) {
+                return reply(cb, { success: false, error: "Enable end game music first." });
+            }
+            if (!gs.winner) {
+                return reply(cb, { success: false, error: "No winner yet." });
+            }
+            stateMachine.playEndGameMusic(gs, gs.winner, stateMachine.MUSIC_TRANSITION_MS);
+            return reply(cb, { success: true });
+        }
+
+        reply(cb, { success: false, error: "Music can only be started from lobby or end game." });
     });
 
     bindAckHandler("room:getState", ({ roomId }, cb) => {
@@ -171,6 +238,7 @@ io.on("connection", (socket) => {
         }
 
         io.to(`${rid}:lobby`).emit("lobby:updated", { state: sanitizeStateForLobby(gs) });
+        io.to(socket.id).emit("music:state", stateMachine.buildMusicPayload(gs));
 
         io.to(rid).emit("player:reconnected", {
             previousId: oldId,
@@ -230,6 +298,7 @@ io.on("connection", (socket) => {
         reply(cb, { success: true });
         const gnosiaCount = gs.players.filter(p => p.role === "gnosia").length;
         io.to(roomId).emit("game:starting", { playerCount: gs.players.length, gnosiaCount });
+        stateMachine.stopRoomMusic(gs, stateMachine.MUSIC_TRANSITION_MS);
 
         stateMachine.scheduleGameStart(gs, 5000);
     });
@@ -455,38 +524,15 @@ io.on("connection", (socket) => {
     });
 
     bindAckHandler("player:rollAura", ({ roomId }, cb) => {
-        console.log(`[ROLL] Attempting roll for socket ${socket.id} in room ${roomId}`);
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
         const player = gs.players.find(p => p.id === socket.id);
         if (!player) return reply(cb, { success: false, error: "Player not found." });
-        console.log(`[ROLL] Player ${player.username}: alive=${player.alive}, rollsRemaining=${player.rollsRemaining}`);
-        if (player.alive && !player.inColdSleep) return reply(cb, { success: false, error: "Only the departed may roll." });
-        if (player.rollsRemaining <= 0) return reply(cb, { success: false, error: "No rolls remaining this round." });
+        if ((player.rollsRemaining || 0) <= 0) return reply(cb, { success: false, error: "No rolls remaining." });
 
-        const auras = [
-            "aura-rage-mode", 
-            "aura-golden-saiyan", 
-            "aura-glacier",
-            "aura-sunset",
-            "aura-glitch",
-            "aura-sparkle-white",
-            "aura-sparkle-yellow",
-            "aura-sparkle-pink",
-            "aura-judgement",
-            "aura-red-saiyan",
-            "aura-halo",
-            "aura-void",
-            "aura-sparkle-rainbow",
-            "aura-sparkle-red"
-        ];
-        console.log(`[ROLL] Available auras: ${auras.length} total`);
-        console.log(`[ROLL] Aura list: ${auras.join(', ')}`);
-        const picked = auras[Math.floor(Math.random() * auras.length)];
-        console.log(`[ROLL] Random index: ${Math.floor(Math.random() * auras.length)}, picked: ${picked}`);
+        const picked = AURA_ROLL_OPTIONS[Math.floor(Math.random() * AURA_ROLL_OPTIONS.length)];
         player.aura = picked;
-        player.rollsRemaining = (player.rollsRemaining || 2) - 1;
-        console.log(`[ROLL] Success: ${player.username} got ${picked}, rolls remaining: ${player.rollsRemaining}`);
+        player.rollsRemaining -= 1;
 
         io.to(roomId).emit("player:auraUpdated", { playerId: socket.id, aura: picked, rollsRemaining: player.rollsRemaining });
         reply(cb, { success: true, aura: picked, rollsRemaining: player.rollsRemaining });
@@ -499,9 +545,8 @@ io.on("connection", (socket) => {
         const player = gs.players.find(p => p.id === socket.id);
         if (!player) return reply(cb, { success: false, error: "Player not found." });
         
-        // Manual selection only for the host after death
         if (!player.isHost) return reply(cb, { success: false, error: "Only the host can manually select an aura." });
-        if (player.alive && !player.inColdSleep) return reply(cb, { success: false, error: "Only the departed may change their aura." });
+        if (!AURA_ROLL_OPTIONS.includes(aura)) return reply(cb, { success: false, error: "Invalid aura." });
 
         player.aura = aura;
         console.log(`[SELECT] Success: Host ${player.username} selected ${aura}`);

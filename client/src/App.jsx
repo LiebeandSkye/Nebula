@@ -3,6 +3,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSocket, useSocketEvent } from "./hooks/useSocket";
+import { useRoomMusic } from "./hooks/useRoomMusic";
 import Lobby from "./pages/Lobby.jsx";
 import Game from "./pages/Game.jsx";
 import { clearPlaySession, loadPlaySession } from "./lib/sessionPersistence.js";
@@ -129,6 +130,12 @@ export default function App() {
     const [resumeBusy, setResumeBusy] = useState(false);
     const screenRef = useRef(screen);
     screenRef.current = screen;
+    const {
+        musicVolume,
+        setMusicVolume,
+        musicMuted,
+        setMusicMuted,
+    } = useRoomMusic(session.roomId);
 
     const tryResumeSession = useCallback(() => {
         const stored = loadPlaySession();
@@ -259,7 +266,23 @@ export default function App() {
         return (
             <>
                 <ReconnectBanner visible={showReconnectBanner} text={bannerText} />
-                <Lobby onReady={handleLobbyReady} resumeFrom={lobbyResume} />
+                <Lobby
+                    onReady={handleLobbyReady}
+                    resumeFrom={lobbyResume}
+                    musicVolume={musicVolume}
+                    setMusicVolume={setMusicVolume}
+                    musicMuted={musicMuted}
+                    setMusicMuted={setMusicMuted}
+                    onLeaveRoom={() => {
+                        setSession(s => ({
+                            ...s,
+                            roomId: null,
+                            myId: null,
+                            myRole: null,
+                            phase: "LOBBY",
+                        }));
+                    }}
+                />
             </>
         );
     }
@@ -277,6 +300,10 @@ export default function App() {
             <Game 
                 session={session} 
                 socket={socket}
+                musicVolume={musicVolume}
+                setMusicVolume={setMusicVolume}
+                musicMuted={musicMuted}
+                setMusicMuted={setMusicMuted}
                 onLeaveRoom={() => {
                     setScreen("lobby");
                     setSession(s => ({ ...s, roomId: null, myId: null, myRole: null }));

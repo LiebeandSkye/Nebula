@@ -18,11 +18,12 @@ function createPlayer(socketId, username, profileId, isHost = false, sessionToke
         scanned: false,
         dismissed: false,
         aura: null,           // Equipped aura CSS class; persists until rerolled
-        rollsRemaining: 0,   // Start with 0, get 2 when die, 1 per subsequent round
+        rollsRemaining: 0,   // Start with 0, get 1 on death, then +1 each later round
     };
 }
 
 function createGameState(roomId, settings = {}) {
+    const now = Date.now();
     return {
         roomId,
         phase: "LOBBY",
@@ -40,6 +41,16 @@ function createGameState(roomId, settings = {}) {
             hasLawyer: settings.hasLawyer || false,
             hasTraitor: settings.hasTraitor || false,
             gnosiaCount: settings.gnosiaCount || null, // null = auto (floor(n/3))
+            lobbyMusicEnabled: settings.lobbyMusicEnabled !== false,
+            endGameMusicEnabled: settings.endGameMusicEnabled !== false,
+        },
+        musicPlayback: {
+            trackKey: settings.lobbyMusicEnabled === false ? null : "lobby",
+            startedAt: settings.lobbyMusicEnabled === false ? null : now,
+            loop: settings.lobbyMusicEnabled !== false,
+            transitionDurationMs: 0,
+            revision: 1,
+            updatedAt: now,
         },
         nightActions: {
             gnosiaVotes: {},
@@ -73,19 +84,10 @@ function resetNightFlags(gameState) {
         player.protected = false;
         player.scanned = false;
         player.voteTarget = null;
-        
-        // Ensure rollsRemaining exists
-        if (typeof player.rollsRemaining !== 'number') {
-            player.rollsRemaining = 0;
-        }
-        
-        // Give 1 roll per round to dead players (except first round after death)
-        if (!player.alive) {
-            const previousRolls = player.rollsRemaining;
-            player.rollsRemaining = (player.rollsRemaining || 0) + 1;
-            console.log(`[RESET] Dead player ${player.username}: ${previousRolls} -> ${player.rollsRemaining} rolls`);
+        // Give everyone 1 roll at the start of each round (round 2+)
+        if (gameState.round > 1) {
+            player.rollsRemaining = 1;
         } else {
-            // Alive players get no rolls
             player.rollsRemaining = 0;
         }
     }

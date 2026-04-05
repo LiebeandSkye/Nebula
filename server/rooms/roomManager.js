@@ -275,7 +275,17 @@ function updateSettings(socketId, roomId, settings) {
     const host = gs.players.find(p => p.id === socketId);
     if (!host || !host.isHost) return { success: false, error: "Only host can change settings." };
 
-    const allowed = ["password", "hasEngineer", "hasDoctor", "hasGuardian", "hasLawyer", "hasTraitor", "gnosiaCount"];
+    const allowed = [
+        "password",
+        "hasEngineer",
+        "hasDoctor",
+        "hasGuardian",
+        "hasLawyer",
+        "hasTraitor",
+        "gnosiaCount",
+        "lobbyMusicEnabled",
+        "endGameMusicEnabled",
+    ];
     for (const key of allowed) {
         if (settings[key] !== undefined) gs.settings[key] = settings[key];
     }
@@ -314,8 +324,21 @@ function sanitizeStateForLobby(gs) {
             hasEngineer: gs.settings.hasEngineer,
             hasDoctor: gs.settings.hasDoctor,
             hasGuardian: gs.settings.hasGuardian,
+            hasLawyer: gs.settings.hasLawyer,
             hasTraitor: gs.settings.hasTraitor,
             gnosiaCount: gs.settings.gnosiaCount,
+            lobbyMusicEnabled: gs.settings.lobbyMusicEnabled !== false,
+            endGameMusicEnabled: gs.settings.endGameMusicEnabled !== false,
+        },
+        music: {
+            playback: {
+                trackKey: gs.musicPlayback?.trackKey || null,
+                startedAt: gs.musicPlayback?.startedAt || null,
+                loop: !!gs.musicPlayback?.loop,
+                transitionDurationMs: gs.musicPlayback?.transitionDurationMs || 0,
+                revision: gs.musicPlayback?.revision || 0,
+                updatedAt: gs.musicPlayback?.updatedAt || null,
+            },
         },
         players: gs.players.map(p => ({
             id: p.id, username: p.username, profileId: p.profileId, profileName: p.profileName || null,

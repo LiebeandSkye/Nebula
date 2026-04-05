@@ -180,8 +180,8 @@ function resolveGnosiaKill(gameState) {
 
     // Kill confirmed
     target.alive = false;
-    target.rollsRemaining = 2; // Give 2 rolls when killed by Gnosia
-    console.log(`[DEATH] ${target.username} killed by Gnosia, given 2 rolls`);
+    target.rollsRemaining = 1;
+    console.log(`[DEATH] ${target.username} killed by Gnosia, given 1 roll`);
     console.log(`[Night] ${target.username} was killed by Gnosia.`);
 
     return { killed: targetId, savedBy: null };

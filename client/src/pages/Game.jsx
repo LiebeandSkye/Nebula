@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { animate } from "animejs";
 import { useSocket, useSocketEvent } from "../hooks/useSocket";
 import PlayerCard from "../components/PlayerCard.jsx";
@@ -8,8 +8,8 @@ import NightPanel from "../components/NightPanel.jsx";
 import StartReveal from "../components/StartReveal.jsx";
 import { clearPlaySession } from "../lib/sessionPersistence.js";
 import { AVATAR_COLORS } from "../lib/profiles.js";
-import { BsStars, BsArrowsFullscreen } from "react-icons/bs";
-import { RiGlobalLine } from "react-icons/ri";
+import { BsStars } from "react-icons/bs";
+import { CiSettings } from "react-icons/ci";
 
 const PHASE_COLORS = {
     DAY_DISCUSSION: "#00f5ff", VOTING: "#ffd700", AFTERNOON: "#ffb347",
@@ -163,9 +163,98 @@ function PhaseTimer({ endsAt, color }) {
     );
 }
 
-function GameOverScreen({ result, onPlayAgain, amHost }) {
+function SettingsActionButton({
+    label,
+    status,
+    active = false,
+    disabled = false,
+    onClick,
+    accent = "#ff8c1a",
+    children,
+}) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: "14px 16px",
+                background: active ? "rgba(255, 140, 26, 0.16)" : "rgba(10, 3, 0, 0.8)",
+                border: `1px solid ${active ? accent : "rgba(255, 140, 26, 0.28)"}`,
+                boxShadow: active ? `0 0 18px ${accent}33` : "none",
+                color: active ? "#ffd7b0" : "#ffb36b",
+                fontFamily: "Press Start 2P",
+                fontSize: 8,
+                cursor: disabled ? "not-allowed" : "pointer",
+                opacity: disabled ? 0.45 : 1,
+                textAlign: "left",
+            }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {children}
+                <span>{label}</span>
+            </span>
+            <span style={{
+                flexShrink: 0,
+                padding: "4px 8px",
+                border: `1px solid ${active ? "#ffd18a66" : "#ff8c1a33"}`,
+                background: active ? "rgba(255, 209, 138, 0.12)" : "transparent",
+                color: active ? "#ffd18a" : "#ff8c1a",
+                fontSize: 7,
+                letterSpacing: "0.08em",
+            }}>
+                {status}
+            </span>
+        </button>
+    );
+}
+
+function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolume, musicMuted, setMusicMuted }) {
     const hw = result.winner === "humans";
     const wc = hw ? "#00f5ff" : "#9b30ff";
+    const [volumePanelPosition, setVolumePanelPosition] = useState({ x: null, y: null });
+    const dragStateRef = useRef(null);
+
+    function startVolumePanelDrag(event) {
+        if (event.target.closest("button, input")) return;
+        const panelRect = event.currentTarget.getBoundingClientRect();
+        dragStateRef.current = {
+            offsetX: event.clientX - panelRect.left,
+            offsetY: event.clientY - panelRect.top,
+        };
+        event.preventDefault();
+    }
+
+    useEffect(() => {
+        function handlePointerMove(event) {
+            if (!dragStateRef.current) return;
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const panelWidth = 280;
+            const panelHeight = 120;
+            const nextX = Math.min(Math.max(12, event.clientX - dragStateRef.current.offsetX), Math.max(12, width - panelWidth - 12));
+            const nextY = Math.min(Math.max(12, event.clientY - dragStateRef.current.offsetY), Math.max(12, height - panelHeight - 12));
+            setVolumePanelPosition({ x: nextX, y: nextY });
+        }
+
+        function stopDrag() {
+            dragStateRef.current = null;
+        }
+
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", stopDrag);
+        window.addEventListener("pointercancel", stopDrag);
+
+        return () => {
+            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointerup", stopDrag);
+            window.removeEventListener("pointercancel", stopDrag);
+        };
+    }, []);
+
     return (
         <div className="crt star-bg" style={{
             position: "fixed", inset: 0, display: "flex", flexDirection: "column",
@@ -209,6 +298,64 @@ function GameOverScreen({ result, onPlayAgain, amHost }) {
             <button className="btn btn-lg" onClick={onPlayAgain} style={{ opacity: amHost ? 1 : 0.6 }}>
                 {amHost ? "PLAY AGAIN" : "WAITING FOR HOST"}
             </button>
+            <div
+                onPointerDown={startVolumePanelDrag}
+                style={{
+                    position: "fixed",
+                    right: volumePanelPosition.x === null ? 24 : "auto",
+                    bottom: volumePanelPosition.y === null ? 24 : "auto",
+                    left: volumePanelPosition.x === null ? "auto" : volumePanelPosition.x,
+                    top: volumePanelPosition.y === null ? "auto" : volumePanelPosition.y,
+                    width: "min(280px, calc(100vw - 32px))",
+                    border: `1px solid ${wc}44`,
+                    background: "#0d0020ee",
+                    boxShadow: `0 0 20px ${wc}22`,
+                    padding: 16,
+                }}>
+                <div
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        marginBottom: 10,
+                        cursor: "grab",
+                        userSelect: "none",
+                        touchAction: "none",
+                    }}>
+                    <div style={{ fontSize: 8, color: "#4a3060", letterSpacing: "0.16em" }}>
+                        YOUR MUSIC VOLUME
+                    </div>
+                    <div style={{
+                        padding: "4px 8px",
+                        border: `1px solid ${wc}33`,
+                        background: `${wc}08`,
+                        color: wc,
+                        fontSize: 6,
+                        letterSpacing: "0.1em",
+                    }}>
+                        DRAG
+                    </div>
+                </div>
+                <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${wc}66, transparent)`, marginBottom: 12 }} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 9, color: wc }}>{musicMuted ? "MUTED" : `${Math.round(musicVolume * 100)}%`}</span>
+                    <button
+                        className="btn-topbar"
+                        onClick={() => setMusicMuted(!musicMuted)}
+                        style={{ borderColor: `${wc}44`, color: musicMuted ? "#8a7aa0" : wc }}>
+                        {musicMuted ? "UNMUTE" : "MUTE"}
+                    </button>
+                </div>
+                <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round(musicVolume * 100)}
+                    onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
+                    style={{ width: "100%", accentColor: wc }}
+                />
+            </div>
         </div>
     );
 }
@@ -270,7 +417,7 @@ function VoteProgressBar({ votesCast, totalAlive }) {
     );
 }
 
-export default function Game({ session, socket, onLeaveRoom }) {
+export default function Game({ session, socket, onLeaveRoom, musicVolume, setMusicVolume, musicMuted, setMusicMuted }) {
     const { roomId, myId, myRole, allies: initialAllies = [], gnosiaCount } = session;
     const { reconnecting } = useSocket();
 
@@ -309,6 +456,8 @@ export default function Game({ session, socket, onLeaveRoom }) {
     const [isRolling,   setRolling]   = useState(false);
     const [rollingAura, setRollingAura] = useState("aura-rage-mode");
     const [showAuraPicker, setShowAuraPicker] = useState(false);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [auraVisibility, setAuraVisibility] = useState("all");
 
     const [isMobile,       setIsMobile]       = useState(false);
     const [desktopChat, setDesktopChat] = useState(false);
@@ -506,7 +655,8 @@ export default function Game({ session, socket, onLeaveRoom }) {
     function playAgain() { if (me?.isHost) socket.emit("room:playAgain", { roomId }, res => { if (!res.success) alert(res.error || "Failed."); }); }
 
     function handleRoll() {
-        if (isRolling || (me?.rollsRemaining ?? 0) <= 0) return;
+        if (isRolling) return;
+        if ((me?.rollsRemaining ?? 0) <= 0) return;
         setRolling(true);
         let interval = setInterval(() => setRollingAura(AURA_ROLL_OPTIONS[Math.floor(Math.random() * AURA_ROLL_OPTIONS.length)]), 80);
         const safety = setTimeout(() => { clearInterval(interval); setRolling(false); }, 8000);
@@ -533,8 +683,22 @@ export default function Game({ session, socket, onLeaveRoom }) {
         });
     }
 
+    function openSettingsModal() {
+        setShowSettingsModal(true);
+    }
+
+    function triggerRollAura() {
+        setShowSettingsModal(false);
+        handleRoll();
+    }
+
+    function triggerChooseAura() {
+        setShowSettingsModal(false);
+        setShowAuraPicker(true);
+    }
+
     if (reconnecting) return <ReconnectingScreen />;
-    if (gameOver) return <GameOverScreen result={gameOver} onPlayAgain={playAgain} amHost={me?.isHost} />;
+    if (gameOver) return <GameOverScreen result={gameOver} onPlayAgain={playAgain} amHost={me?.isHost} musicVolume={musicVolume} setMusicVolume={setMusicVolume} musicMuted={musicMuted} setMusicMuted={setMusicMuted} />;
 
     const canTarget = p => {
         if (!me?.alive || p.id === myId) return false;
@@ -546,6 +710,8 @@ export default function Game({ session, socket, onLeaveRoom }) {
     const aliveCount = players.filter(p => p.alive).length;
     const skipPhases = ["DAY_DISCUSSION", "AFTERNOON"];
     const showSkipBar = skipPhases.includes(phase) && me?.alive;
+    const canRollAura = (me?.rollsRemaining ?? 0) > 0 && !isRolling;
+    const canChooseAura = !!me?.isHost;
 
     const sharedOverlays = (
         <>
@@ -601,6 +767,91 @@ export default function Game({ session, socket, onLeaveRoom }) {
                     </div>
                 </div>
             )}
+            {showSettingsModal && (
+                <div
+                    onClick={() => setShowSettingsModal(false)}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: 999990,
+                        background: "rgba(8, 3, 0, 0.82)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 20,
+                    }}>
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            width: "min(560px, 94vw)",
+                            background: "linear-gradient(180deg, rgba(26,10,0,0.96), rgba(12,5,0,0.96))",
+                            border: "1px solid rgba(255, 140, 26, 0.7)",
+                            boxShadow: "0 0 0 1px rgba(255, 140, 26, 0.18), 0 0 28px rgba(255, 140, 26, 0.22)",
+                            padding: 24,
+                        }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#ff9b3d" }}>
+                                <CiSettings size={22} />
+                                <span style={{ fontSize: 11, letterSpacing: "0.18em" }}>SETTING</span>
+                            </div>
+                            <button
+                                onClick={() => setShowSettingsModal(false)}
+                                className="btn-topbar"
+                                style={{ borderColor: "#ff8c1a44", color: "#ff9b3d" }}>
+                                CLOSE
+                            </button>
+                        </div>
+                        <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(255, 140, 26, 0.9), transparent)", marginBottom: 18 }} />
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                            <SettingsActionButton
+                                label={`ROLL AURA (${me?.rollsRemaining ?? 0})`}
+                                status={canRollAura ? "READY" : "LOCKED"}
+                                active={canRollAura}
+                                disabled={!canRollAura}
+                                onClick={triggerRollAura}>
+                                <BsStars style={{ color: "#ffd700", fontSize: 14 }} />
+                            </SettingsActionButton>
+                            {me?.isHost && (
+                                <SettingsActionButton
+                                    label="CHOOSE AURA"
+                                    status={canChooseAura ? "READY" : "LOCKED"}
+                                    active={canChooseAura}
+                                    disabled={!canChooseAura}
+                                    onClick={triggerChooseAura}>
+                                    <BsStars style={{ color: "#00f5ff", fontSize: 14 }} />
+                                </SettingsActionButton>
+                            )}
+                            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
+                                <div style={{ flex: "1 1 220px" }}>
+                                    <SettingsActionButton
+                                        label="HIDE ALL AURA"
+                                        status={auraVisibility === "none" ? "ACTIVE" : "OFF"}
+                                        active={auraVisibility === "none"}
+                                        onClick={() => setAuraVisibility("none")}
+                                    />
+                                </div>
+                                <div style={{ flex: "1 1 220px" }}>
+                                    <SettingsActionButton
+                                        label="HIDE OTHERS AURA"
+                                        status={auraVisibility === "self" ? "ACTIVE" : "OFF"}
+                                        active={auraVisibility === "self"}
+                                        onClick={() => setAuraVisibility("self")}
+                                    />
+                                </div>
+                            </div>
+                            <SettingsActionButton
+                                label="SHOW ALL AURA"
+                                status={auraVisibility === "all" ? "ACTIVE" : "OFF"}
+                                active={auraVisibility === "all"}
+                                onClick={() => setAuraVisibility("all")}
+                            />
+                            <div style={{ fontSize: 8, color: "#b97b4e", lineHeight: 1.8, marginTop: 6 }}>
+                                These settings affect only your screen.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             {isRolling && (
                 <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <div style={{ width: "min(320px, 90vw)", border: "2px solid #ffd70066", background: "#0d0020", padding: 24, textAlign: "center" }}>
@@ -644,25 +895,17 @@ export default function Game({ session, socket, onLeaveRoom }) {
                 <button onClick={() => setShowRoleInfo(true)} className="btn-topbar" style={{ border: `1px solid ${roleColor}55`, color: roleColor }}>
                     {myRole?.toUpperCase()} ?
                 </button>
-                {me && !me.alive && (
-                    <button 
-                        onClick={handleRoll} 
-                        disabled={isRolling || (me?.rollsRemaining ?? 0) <= 0} 
-                        className="btn-topbar" 
-                        style={{ border: "1px solid #ffd70055", color: "#ffd700" }}
-                    >
-                        <BsStars style={{ color: "#ffd700" }} /> ROLL AURA ({me?.rollsRemaining ?? 0})
-                    </button>
-                )}
-                {me && !me.alive && me.isHost && (
-                    <button 
-                        onClick={() => setShowAuraPicker(true)} 
-                        className="btn-topbar" 
-                        style={{ border: "1px solid #00f5ff55", color: "#00f5ff" }}
-                    >
-                        <BsStars style={{ color: "#00f5ff" }} />
-                    </button>
-                )}
+                <button
+                    onClick={openSettingsModal}
+                    className="btn-topbar"
+                    style={{
+                        border: "1px solid #ff8c1a88",
+                        color: "#ff9b3d",
+                        background: "rgba(255, 140, 26, 0.08)",
+                        boxShadow: "0 0 18px rgba(255, 140, 26, 0.12)",
+                    }}>
+                    <CiSettings size={18} /> SETTING
+                </button>
                 {!isMobile && (
                     <button onClick={() => setDesktopChat(o => !o)} className="btn-topbar" style={{ color: "#8a7aa0" }}>
                         {desktopChat ? "HIDE CHAT" : "SHOW CHAT"}
@@ -692,7 +935,7 @@ export default function Game({ session, socket, onLeaveRoom }) {
                             <span style={{ fontSize: 9, color: "#4a3060" }}>{aliveCount} alive / {players.length}</span>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px,1fr))", gap: 10 }}>
-                            {players.map(p => <PlayerCard key={p.id} player={p} isMe={p.id === myId} isSelected={selectedTarget === p.id} canSelect={me?.alive && canTarget(p)} onSelect={id => setSelectedTarget(selectedTarget === id ? null : id)} phase={phase} myRole={myRole} gnosiaAllies={allies.map(a => a.id)} voteBreakdown={voteBreakdown} allPlayers={players} />)}
+                            {players.map(p => <PlayerCard key={p.id} player={p} isMe={p.id === myId} isSelected={selectedTarget === p.id} canSelect={me?.alive && canTarget(p)} onSelect={id => setSelectedTarget(selectedTarget === id ? null : id)} phase={phase} myRole={myRole} gnosiaAllies={allies.map(a => a.id)} voteBreakdown={voteBreakdown} allPlayers={players} auraVisibility={auraVisibility} />)}
                         </div>
                     </div>
                     {isVoting && me?.alive && (
@@ -724,7 +967,7 @@ export default function Game({ session, socket, onLeaveRoom }) {
                         <div style={{ flexShrink: 0, borderBottom: "1px solid #1a0a2a", background: "#07000f", overflowY: "auto", maxHeight: 210 }}>
                             <div style={{ padding: "10px 12px" }}>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                                    {players.map(p => <div key={p.id} style={{ width: 76 }}><PlayerCard player={p} isMe={p.id === myId} isSelected={selectedTarget === p.id} canSelect={me?.alive && canTarget(p)} onSelect={id => setSelectedTarget(selectedTarget === id ? null : id)} phase={phase} myRole={myRole} gnosiaAllies={allies.map(a => a.id)} voteBreakdown={voteBreakdown} allPlayers={players} compact={true} /></div>)}
+                                    {players.map(p => <div key={p.id} style={{ width: 76 }}><PlayerCard player={p} isMe={p.id === myId} isSelected={selectedTarget === p.id} canSelect={me?.alive && canTarget(p)} onSelect={id => setSelectedTarget(selectedTarget === id ? null : id)} phase={phase} myRole={myRole} gnosiaAllies={allies.map(a => a.id)} voteBreakdown={voteBreakdown} allPlayers={players} compact={true} auraVisibility={auraVisibility} /></div>)}
                                 </div>
                             </div>
                         </div>
