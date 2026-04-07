@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSocket, useSocketEvent } from "../hooks/useSocket";
 import { clearPlaySession, getOrCreateSessionToken, savePlaySession } from "../lib/sessionPersistence.js";
 import { PROFILES, AVATAR_COLORS } from "../lib/profiles.js";
+import EmoteWheel, { getRandomEmotes } from "../components/EmoteWheel.jsx";
 
 function Avatar({ profileId, username, size = 56, color }) {
     const c = color || AVATAR_COLORS[profileId] || "#c8b8ff";
@@ -98,6 +99,14 @@ export default function Lobby({
     const dragStateRef = useRef(null);
     const volumeDragStateRef = useRef(null);
 
+    // Emote state for lobby
+    const [lobbyEmotes,    setLobbyEmotes]    = useState({});
+    const [lobbyEmoteWheel, setLobbyEmoteWheel] = useState(null);
+    const lobbyHoldRafRef   = useRef(null);
+    const lobbyHoldStartRef = useRef(null);
+    const lobbyAvatarRef    = useRef(null);
+    const lobbyEmoteTimers  = useRef({});
+
     function syncSettingsFromState(state) {
         if (!state?.settings) return;
         setSettings(prev => ({
@@ -134,6 +143,13 @@ export default function Lobby({
     });
     useSocketEvent("game:starting", () => setLoading(true));
     useSocketEvent("music:state", (payload) => setMusicState(payload));
+    useSocketEvent("player:emote", ({ playerId, emote }) => {
+        setLobbyEmotes(prev => ({ ...prev, [playerId]: emote }));
+        clearTimeout(lobbyEmoteTimers.current[playerId]);
+        lobbyEmoteTimers.current[playerId] = setTimeout(() => {
+            setLobbyEmotes(prev => { const n = { ...prev }; delete n[playerId]; return n; });
+        }, 5000);
+    });
 
     useEffect(() => {
         if (!resumeFrom?.lobbyState || !resumeFrom.roomId || !resumeFrom.myId) return;
@@ -147,6 +163,29 @@ export default function Lobby({
     const takenProfiles = lobbyState?.players.map(p => p.profileId) || [];
     const amHost = lobbyState?.players.find(p => p.id === myId && p.isHost);
     const canStart = amHost && (lobbyState?.players.length || 0) >= 2 && !loading;
+
+    function lobbyStartHold(e) {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        e.preventDefault();
+        lobbyHoldStartRef.current = Date.now();
+        const tick = () => {
+            if (!lobbyHoldStartRef.current) return;
+            const pct = Math.min(100, ((Date.now() - lobbyHoldStartRef.current) / 2000) * 100);
+            if (pct < 100) {
+                lobbyHoldRafRef.current = requestAnimationFrame(tick);
+            } else {
+                lobbyHoldStartRef.current = null;
+                const rect = lobbyAvatarRef.current?.getBoundingClientRect();
+                if (rect && roomId) setLobbyEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes() });
+            }
+        };
+        lobbyHoldRafRef.current = requestAnimationFrame(tick);
+    }
+
+    function lobbyCancelHold() {
+        cancelAnimationFrame(lobbyHoldRafRef.current);
+        lobbyHoldStartRef.current = null;
+    }
 
     async function handleCreate() {
         if (!username.trim()) return setError("Enter a callsign.");
@@ -355,12 +394,29 @@ export default function Lobby({
                         <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
                             {lobbyState?.players.map(p => (
                                 <div key={p.id} className="anim-fadeInUp" style={{
+                                    position: "relative",
                                     display: "flex", alignItems: "center", gap: 14,
                                     padding: "10px 12px",
                                     background: p.id === myId ? "#00f5ff08" : "transparent",
                                     border: `1px solid ${p.id === myId ? "#00f5ff22" : "transparent"}`,
                                 }}>
-                                    <Avatar profileId={p.profileId} username={p.username} size={44} />
+                                    {lobbyEmotes[p.id] && (
+                                        <div style={{ position: "absolute", top: -58, left: 8, zIndex: 30, pointerEvents: "none", animation: "emotePopIn 0.25s ease both" }}>
+                                            <div style={{ background: "rgba(13,0,32,0.92)", border: "1px solid #2a1a4a", borderRadius: 8, padding: 4, boxShadow: "0 4px 18px rgba(0,0,0,0.7)" }}>
+                                                <img src={lobbyEmotes[p.id].src} alt={lobbyEmotes[p.id].label} style={{ width: 56, height: "auto", objectFit: "contain", borderRadius: 6, display: "block" }} />
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div
+                                        ref={p.id === myId ? lobbyAvatarRef : undefined}
+                                        onPointerDown={p.id === myId ? lobbyStartHold : undefined}
+                                        onPointerUp={p.id === myId ? lobbyCancelHold : undefined}
+                                        onPointerLeave={p.id === myId ? lobbyCancelHold : undefined}
+                                        onPointerCancel={p.id === myId ? lobbyCancelHold : undefined}
+                                        style={{ cursor: p.id === myId ? "grab" : "default", touchAction: p.id === myId ? "none" : undefined }}
+                                    >
+                                        <Avatar profileId={p.profileId} username={p.username} size={44} />
+                                    </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{
                                             fontSize: 10, color: "#e0d4ff",
@@ -749,6 +805,15 @@ export default function Lobby({
                         />
                     </div>
                 )}
+            {lobbyEmoteWheel && (
+                <EmoteWheel
+                    cx={lobbyEmoteWheel.cx}
+                    cy={lobbyEmoteWheel.cy}
+                    emotes={lobbyEmoteWheel.emotes}
+                    onSelect={emote => { setLobbyEmoteWheel(null); emit("player:emote", { roomId, emote }); }}
+                    onClose={() => setLobbyEmoteWheel(null)}
+                />
+            )}
             </div>
         );
     }

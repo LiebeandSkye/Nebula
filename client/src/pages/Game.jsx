@@ -213,11 +213,44 @@ function SettingsActionButton({
     );
 }
 
-function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolume, musicMuted, setMusicMuted }) {
+function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolume, musicMuted, setMusicMuted, myId = null, playerEmotes = {}, onEmote }) {
     const hw = result.winner === "humans";
     const wc = hw ? "#00f5ff" : "#9b30ff";
     const [volumePanelPosition, setVolumePanelPosition] = useState({ x: null, y: null });
     const dragStateRef = useRef(null);
+
+    // Emote wheel state for game-over screen
+    const holdRafRef   = useRef(null);
+    const holdStartRef = useRef(null);
+    const avatarRefs   = useRef({});
+    const [goHoldProgress, setGoHoldProgress] = useState(0);
+    const [goEmoteWheel,   setGoEmoteWheel]   = useState(null);
+
+    function goStartHold(playerId, e) {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        e.preventDefault();
+        holdStartRef.current = Date.now();
+        const tick = () => {
+            if (!holdStartRef.current) return;
+            const pct = Math.min(100, ((Date.now() - holdStartRef.current) / 2000) * 100);
+            setGoHoldProgress(pct);
+            if (pct < 100) {
+                holdRafRef.current = requestAnimationFrame(tick);
+            } else {
+                holdStartRef.current = null;
+                setGoHoldProgress(0);
+                const rect = avatarRefs.current[playerId]?.getBoundingClientRect();
+                if (rect) setGoEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes() });
+            }
+        };
+        holdRafRef.current = requestAnimationFrame(tick);
+    }
+
+    function goCancelHold() {
+        cancelAnimationFrame(holdRafRef.current);
+        holdStartRef.current = null;
+        setGoHoldProgress(0);
+    }
 
     function startVolumePanelDrag(event) {
         if (event.target.closest("button, input")) return;
@@ -262,6 +295,14 @@ function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolu
             alignItems: "center", justifyContent: "center", gap: 28, padding: 32,
             zIndex: 60, overflowY: "auto", animation: "fadeIn 0.4s ease",
         }}>
+            {goEmoteWheel && (
+                <EmoteWheel
+                    cx={goEmoteWheel.cx} cy={goEmoteWheel.cy}
+                    emotes={goEmoteWheel.emotes}
+                    onSelect={emote => { setGoEmoteWheel(null); onEmote?.(emote); }}
+                    onClose={() => setGoEmoteWheel(null)}
+                />
+            )}
             <div style={{ fontSize: 80, filter: `drop-shadow(0 0 30px ${wc})` }}>{hw ? "◈" : "👁"}</div>
             <div style={{ textAlign: "center" }}>
                 <h1 style={{ fontSize: 28, color: wc, textShadow: `0 0 20px ${wc}`, marginBottom: 12 }}>
@@ -277,14 +318,36 @@ function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolu
                     {result.players.map(p => {
                         const rc = ROLE_COLORS[p.role] || "#c8b8ff";
                         const ac = AVATAR_COLORS[p.profileId] || "#c8b8ff";
+                        const isMe = p.id === myId;
                         return (
-                            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 10, borderBottom: "1px solid #1a0a2a" }}>
-                                <div style={{ width: 40, height: 40, flexShrink: 0, border: `2px solid ${ac}55`, background: ac + "15", overflow: "hidden" }}>
+                            <div key={p.id} style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, paddingBottom: 10, borderBottom: "1px solid #1a0a2a" }}>
+                                {playerEmotes[p.id] && (
+                                    <div style={{ position: "absolute", top: -58, left: 0, zIndex: 30, pointerEvents: "none", animation: "emotePopIn 0.25s ease both" }}>
+                                        <div style={{ background: "rgba(13,0,32,0.92)", border: "1px solid #2a1a4a", borderRadius: 8, padding: 4, boxShadow: "0 4px 18px rgba(0,0,0,0.7)" }}>
+                                            <img src={playerEmotes[p.id].src} alt={playerEmotes[p.id].label} style={{ width: 56, height: "auto", objectFit: "contain", borderRadius: 6, display: "block" }} />
+                                        </div>
+                                    </div>
+                                )}
+                                <div
+                                    ref={el => { if (isMe) avatarRefs.current[p.id] = el; }}
+                                    onPointerDown={isMe ? e => goStartHold(p.id, e) : undefined}
+                                    onPointerUp={isMe ? goCancelHold : undefined}
+                                    onPointerLeave={isMe ? goCancelHold : undefined}
+                                    onPointerCancel={isMe ? goCancelHold : undefined}
+                                    style={{ width: 40, height: 40, flexShrink: 0, border: `2px solid ${ac}55`, background: ac + "15", overflow: "hidden", position: "relative", cursor: isMe ? (goHoldProgress > 0 ? "grabbing" : "grab") : "default", touchAction: isMe ? "none" : undefined }}>
                                     <img src={`/profiles/${p.profileId}.jpg`} alt={p.username} style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                         onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
                                     <div style={{ display: "none", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", color: ac, fontSize: 16, fontWeight: "bold" }}>
                                         {p.username[0].toUpperCase()}
                                     </div>
+                                    {isMe && goHoldProgress > 0 && (
+                                        <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} viewBox="0 0 40 40">
+                                            <circle cx="20" cy="20" r="17" stroke="#c8b8ff" strokeWidth="2.5" fill="none"
+                                                strokeDasharray={`${2 * Math.PI * 17}`}
+                                                strokeDashoffset={`${2 * Math.PI * 17 * (1 - goHoldProgress / 100)}`}
+                                                transform="rotate(-90 20 20)" strokeLinecap="round" />
+                                        </svg>
+                                    )}
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: 10, color: "#e0d4ff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.username}</div>
@@ -722,7 +785,7 @@ export default function Game({ session, socket, onLeaveRoom, musicVolume, setMus
     }
 
     if (reconnecting) return <ReconnectingScreen />;
-    if (gameOver) return <GameOverScreen result={gameOver} onPlayAgain={playAgain} amHost={me?.isHost} musicVolume={musicVolume} setMusicVolume={setMusicVolume} musicMuted={musicMuted} setMusicMuted={setMusicMuted} />;
+    if (gameOver) return <GameOverScreen result={gameOver} onPlayAgain={playAgain} amHost={me?.isHost} musicVolume={musicVolume} setMusicVolume={setMusicVolume} musicMuted={musicMuted} setMusicMuted={setMusicMuted} myId={myId} playerEmotes={playerEmotes} onEmote={emote => socket.emit("player:emote", { roomId, emote })} />;
 
     const canTarget = p => {
         if (!me?.alive || p.id === myId) return false;
