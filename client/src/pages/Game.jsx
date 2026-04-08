@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { animate } from "animejs";
-import { useSocket, useSocketEvent } from "../hooks/useSocket";
+import { useSocketEvent } from "../hooks/useSocket";
 import PlayerCard from "../components/PlayerCard.jsx";
 import EmoteWheel, { getRandomEmotes } from "../components/EmoteWheel.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
@@ -415,25 +415,32 @@ function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolu
     );
 }
 
-function ReconnectingScreen() {
+function ReconnectingOverlay({ visible, message }) {
+    if (!visible) return null;
     return (
-        <div className="crt star-bg" style={{ height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px)" }} />
-            <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 32, zIndex: 10 }}>
-                <div style={{ fontSize: 72, animation: "pulse 1.5s ease-in-out infinite", filter: "drop-shadow(0 0 30px #00f5ff)" }}>◈</div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                    <h1 style={{ fontSize: 28, letterSpacing: "0.15em", color: "#00f5ff", textShadow: "0 0 20px #00f5ff88", margin: 0 }}>RECONNECTING...</h1>
-                    <p style={{ fontSize: 10, color: "#4a3060", textAlign: "center", lineHeight: 1.8, margin: 0 }}>Attempting to restore connection<br />to the game server.</p>
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    {[0, 1, 2].map(i => (
-                        <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#00f5ff", boxShadow: "0 0 12px #00f5ff", animation: "bounce 1.2s ease-in-out infinite", animationDelay: `${i * 0.2}s` }} />
-                    ))}
-                </div>
+        <div style={{ position: "fixed", top: 56, left: "50%", transform: "translateX(-50%)", zIndex: 999999, pointerEvents: "none" }}>
+            <div style={{
+                border: "1px solid #00f5ff55",
+                background: "#0d0020f2",
+                color: "#00f5ff",
+                padding: "10px 16px",
+                boxShadow: "0 0 20px #000",
+                fontSize: 8,
+                fontFamily: "Press Start 2P, monospace",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+            }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#00f5ff", boxShadow: "0 0 12px #00f5ff", animation: "bounce 1.2s ease-in-out infinite" }} />
+                <span>{message || "RECONNECTING..."}</span>
+            </div>
+            <div style={{ textAlign: "center", marginTop: 8 }}>
+                <p style={{ fontSize: 8, color: "#4a3060", margin: 0 }}>
+                    Keeping game state on screen while reconnecting...
+                </p>
             </div>
             <style>{`
-                @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.7;transform:scale(1.1)} }
-                @keyframes bounce { 0%,100%{transform:translateY(0);opacity:0.6} 50%{transform:translateY(-12px);opacity:1} }
+                @keyframes bounce { 0%,100%{transform:translateY(0);opacity:0.6} 50%{transform:translateY(-6px);opacity:1} }
             `}</style>
         </div>
     );
@@ -472,9 +479,18 @@ function VoteProgressBar({ votesCast, totalAlive }) {
     );
 }
 
-export default function Game({ session, socket, onLeaveRoom, musicVolume, setMusicVolume, musicMuted, setMusicMuted }) {
+export default function Game({
+    session,
+    socket,
+    onLeaveRoom,
+    musicVolume,
+    setMusicVolume,
+    musicMuted,
+    setMusicMuted,
+    reconnecting = false,
+    reconnectMessage = "RECONNECTING...",
+}) {
     const { roomId, myId, myRole, allies: initialAllies = [], gnosiaCount } = session;
-    const { reconnecting } = useSocket();
 
     // Note: Render.com keep-awake heartbeat has been moved to App.jsx to ensure
     // it runs across all screens including the Lobby.
@@ -778,7 +794,6 @@ export default function Game({ session, socket, onLeaveRoom, musicVolume, setMus
         setShowAuraPicker(true);
     }
 
-    if (reconnecting) return <ReconnectingScreen />;
     if (gameOver) return <GameOverScreen result={gameOver} onPlayAgain={playAgain} amHost={me?.isHost} musicVolume={musicVolume} setMusicVolume={setMusicVolume} musicMuted={musicMuted} setMusicMuted={setMusicMuted} myId={myId} playerEmotes={playerEmotes} onEmote={emote => socket.emit("player:emote", { roomId, emote })} />;
 
     const canTarget = p => {
@@ -796,6 +811,7 @@ export default function Game({ session, socket, onLeaveRoom, musicVolume, setMus
 
     const sharedOverlays = (
         <>
+            <ReconnectingOverlay visible={reconnecting} message={reconnectMessage} />
             {lostConnectionNotice && (
                 <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 999999, padding: "10px 20px", background: "#1a0008ee", border: "1px solid #ff2a2a55", color: "#ff8888", fontSize: 9 }}>{lostConnectionNotice}</div>
             )}

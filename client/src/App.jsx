@@ -1,5 +1,5 @@
 /**
- * App.jsx — Screen router. Role reveal screen. Final.
+ * App.jsx - Screen router and reconnect/wake coordinator.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSocket, useSocketEvent } from "./hooks/useSocket";
@@ -13,6 +13,29 @@ const ROLE_COLORS = {
     guardian: "#ffd700", human: "#c8b8ff", lawyer: "#ff8833", traitor: "#ff4040",
 };
 const ROLE_ICONS = { gnosia: "👁", engineer: "⚡", doctor: "☤", guardian: "🛡", human: "◈", lawyer: "⚖", traitor: "◈" };
+
+const SERVER_BASE_URL = (import.meta.env.VITE_SERVER_URL || "").replace(/\/$/, "");
+const HEALTH_URL = SERVER_BASE_URL ? `${SERVER_BASE_URL}/api/health` : "/api/health";
+const WAKE_ATTEMPT_DELAYS_MS = [0, 1200, 2200, 3500, 5000, 7000, 9000];
+const RECONNECT_BACKOFF_MS = [1500, 2500, 4000, 6000, 9000, 12000];
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function wakeProbe() {
+    try {
+        // no-cors avoids noisy browser CORS failures while still waking Render.
+        await fetch(HEALTH_URL, {
+            method: "GET",
+            mode: "no-cors",
+            cache: "no-store",
+        });
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 function RoleReveal({ roleData }) {
     const color = ROLE_COLORS[roleData.role] || "#c8b8ff";
@@ -61,7 +84,7 @@ function RoleReveal({ roleData }) {
                         }}>
                             YOUR ALLIES
                         </p>
-                        {roleData.gnosiaAllies.map(a => (
+                        {roleData.gnosiaAllies.map((a) => (
                             <div key={a.id} style={{
                                 display: "flex", alignItems: "center", gap: 12,
                                 padding: "8px 10px", marginBottom: 6,
@@ -73,7 +96,7 @@ function RoleReveal({ roleData }) {
                                 }}>
                                     <img src={`/profiles/${a.profileId}.jpg`} alt={a.username}
                                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                        onError={e => { e.target.style.display = "none"; }} />
+                                        onError={(e) => { e.target.style.display = "none"; }} />
                                 </div>
                                 <span style={{ fontSize: 10, color: "#c8b8ff" }}>{a.username}</span>
                                 <span style={{ fontSize: 8, color: "#4a3060", marginLeft: "auto" }}>
@@ -117,7 +140,7 @@ function ReconnectBanner({ visible, text }) {
 }
 
 export default function App() {
-    const { socket, connected, reconnecting } = useSocket();
+    const { socket, connected, reconnecting, connectSocket } = useSocket();
     const [screen, setScreen] = useState("lobby");
     const [roleData, setRoleData] = useState(null);
     const [session, setSession] = useState({
@@ -128,14 +151,104 @@ export default function App() {
     });
     const [lobbyResume, setLobbyResume] = useState(null);
     const [resumeBusy, setResumeBusy] = useState(false);
+    const [wakeStage, setWakeStage] = useState("idle"); // idle | waking | connecting
+
     const screenRef = useRef(screen);
-    screenRef.current = screen;
+    const connectCycleRef = useRef(null);
+    const reconnectTimerRef = useRef(null);
+    const reconnectAttemptRef = useRef(0);
+
     const {
         musicVolume,
         setMusicVolume,
         musicMuted,
         setMusicMuted,
     } = useRoomMusic(session.roomId);
+
+    useEffect(() => {
+        screenRef.current = screen;
+    }, [screen]);
+
+    const clearReconnectTimer = useCallback(() => {
+        if (reconnectTimerRef.current) {
+            clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
+        }
+    }, []);
+
+    const runWakeThenConnect = useCallback(async () => {
+        if (socket.connected) {
+            setWakeStage("idle");
+            return;
+        }
+        if (connectCycleRef.current) {
+            return;
+        }
+
+        connectCycleRef.current = (async () => {
+            setWakeStage("waking");
+            let woke = false;
+            for (const delayMs of WAKE_ATTEMPT_DELAYS_MS) {
+                if (delayMs > 0) {
+                    await sleep(delayMs);
+                }
+                woke = await wakeProbe();
+                if (woke) {
+                    break;
+                }
+            }
+
+            // Even if wake probe cannot confirm, still try socket connect.
+            setWakeStage("connecting");
+            connectSocket();
+        })().finally(() => {
+            connectCycleRef.current = null;
+        });
+    }, [socket.connected, connectSocket]);
+
+    const scheduleReconnect = useCallback(() => {
+        clearReconnectTimer();
+        const idx = Math.min(reconnectAttemptRef.current, RECONNECT_BACKOFF_MS.length - 1);
+        const delayMs = RECONNECT_BACKOFF_MS[idx];
+        reconnectAttemptRef.current += 1;
+        reconnectTimerRef.current = setTimeout(() => {
+            runWakeThenConnect();
+        }, delayMs);
+    }, [clearReconnectTimer, runWakeThenConnect]);
+
+    useEffect(() => {
+        const kickoff = setTimeout(() => {
+            runWakeThenConnect();
+        }, 0);
+        return () => {
+            clearTimeout(kickoff);
+            clearReconnectTimer();
+        };
+    }, [runWakeThenConnect, clearReconnectTimer]);
+
+    useEffect(() => {
+        function onConnect() {
+            reconnectAttemptRef.current = 0;
+            clearReconnectTimer();
+            setWakeStage("idle");
+        }
+        function onDisconnect() {
+            scheduleReconnect();
+        }
+        function onConnectError() {
+            scheduleReconnect();
+        }
+
+        socket.on("connect", onConnect);
+        socket.on("disconnect", onDisconnect);
+        socket.on("connect_error", onConnectError);
+
+        return () => {
+            socket.off("connect", onConnect);
+            socket.off("disconnect", onDisconnect);
+            socket.off("connect_error", onConnectError);
+        };
+    }, [socket, scheduleReconnect, clearReconnectTimer]);
 
     const tryResumeSession = useCallback(() => {
         const stored = loadPlaySession();
@@ -171,7 +284,7 @@ export default function App() {
                 return;
             }
 
-            setSession(s => ({
+            setSession((s) => ({
                 ...s,
                 roomId: stored.roomId,
                 myId: res.myId,
@@ -206,18 +319,13 @@ export default function App() {
         });
     }, [socket]);
 
-    // Render.com Keep-Awake Heartbeat
-    // Pings the server every 5 minutes to prevent the free tier from sleeping.
-    // Also pings immediately on mount to trigger a "cold start" wake-up as early as possible.
+    // Render keep-awake heartbeat (best effort).
     useEffect(() => {
-        const url = import.meta.env.VITE_SERVER_URL || "";
         const ping = () => {
-            fetch(`${url}/api/health`).catch(() => {});
+            wakeProbe().catch(() => {});
         };
 
-        // Immediate wake-up call
         ping();
-
         const interval = setInterval(ping, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, []);
@@ -227,22 +335,26 @@ export default function App() {
             tryResumeSession();
         }
         socket.on("connect", onConnect);
-        if (socket.connected) tryResumeSession();
+        if (socket.connected) {
+            setTimeout(() => {
+                tryResumeSession();
+            }, 0);
+        }
         return () => socket.off("connect", onConnect);
     }, [socket, tryResumeSession]);
 
-    useSocketEvent("game:roleAssigned", payload => {
+    useSocketEvent("game:roleAssigned", (payload) => {
         setRoleData(payload);
-        setSession(s => ({ ...s, myRole: payload.role, allies: payload.gnosiaAllies || [] }));
+        setSession((s) => ({ ...s, myRole: payload.role, allies: payload.gnosiaAllies || [] }));
         setScreen("roleReveal");
     });
 
     useSocketEvent("game:starting", ({ gnosiaCount }) => {
-        setSession(s => ({ ...s, gnosiaCount: typeof gnosiaCount === "number" ? gnosiaCount : s.gnosiaCount }));
+        setSession((s) => ({ ...s, gnosiaCount: typeof gnosiaCount === "number" ? gnosiaCount : s.gnosiaCount }));
     });
 
-    useSocketEvent("phase:changed", payload => {
-        setSession(s => ({
+    useSocketEvent("phase:changed", (payload) => {
+        setSession((s) => ({
             ...s,
             phase: payload.phase,
             lastPhasePayload: payload,
@@ -253,13 +365,13 @@ export default function App() {
 
     useSocketEvent("room:backToLobby", (lobbyState) => {
         setLobbyResume({ lobbyState, roomId: session.roomId, myId: session.myId });
-        setSession(s => ({ ...s, phase: "LOBBY", myRole: null }));
+        setSession((s) => ({ ...s, phase: "LOBBY", myRole: null }));
         setRoleData(null);
         setScreen("lobby");
     });
 
     function handleLobbyReady(roomId, myId, myProfileId) {
-        setSession(s => ({
+        setSession((s) => ({
             ...s,
             roomId,
             myId,
@@ -269,14 +381,22 @@ export default function App() {
     }
 
     const stored = typeof window !== "undefined" ? loadPlaySession() : null;
-    const showReconnectBanner =
-        !connected && !!stored?.roomId ||
-        (connected && resumeBusy && !!stored?.roomId) ||
-        (reconnecting && !!stored?.roomId);
+    const hasStoredSession = !!stored?.roomId;
 
-    const bannerText = !connected
-        ? "RECONNECTING..."
-        : (resumeBusy ? "RESTORING SESSION..." : "RECONNECTING...");
+    const showReconnectBanner = hasStoredSession && (
+        wakeStage !== "idle" ||
+        !connected ||
+        reconnecting ||
+        resumeBusy
+    );
+
+    const bannerText = wakeStage === "waking"
+        ? "WAKING SERVER..."
+        : wakeStage === "connecting" || !connected
+            ? "CONNECTING..."
+            : resumeBusy
+                ? "RESTORING SESSION..."
+                : "RECONNECTING...";
 
     if (screen === "lobby") {
         return (
@@ -290,7 +410,7 @@ export default function App() {
                     musicMuted={musicMuted}
                     setMusicMuted={setMusicMuted}
                     onLeaveRoom={() => {
-                        setSession(s => ({
+                        setSession((s) => ({
                             ...s,
                             roomId: null,
                             myId: null,
@@ -313,16 +433,18 @@ export default function App() {
     return (
         <>
             <ReconnectBanner visible={showReconnectBanner} text={bannerText} />
-            <Game 
-                session={session} 
+            <Game
+                session={session}
                 socket={socket}
+                reconnecting={reconnecting || wakeStage !== "idle" || !connected}
+                reconnectMessage={bannerText}
                 musicVolume={musicVolume}
                 setMusicVolume={setMusicVolume}
                 musicMuted={musicMuted}
                 setMusicMuted={setMusicMuted}
                 onLeaveRoom={() => {
                     setScreen("lobby");
-                    setSession(s => ({ ...s, roomId: null, myId: null, myRole: null }));
+                    setSession((s) => ({ ...s, roomId: null, myId: null, myRole: null }));
                 }}
             />
         </>

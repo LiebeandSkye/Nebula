@@ -36,27 +36,48 @@ const AURA_ROLL_OPTIONS = [
 ];
 
 // ── CORS & Socket.io Configuration ───────────────────────────────────
-const ALLOWED_ORIGINS = [
+function normalizeOrigin(origin) {
+    return String(origin || "").trim().replace(/\/$/, "");
+}
+
+function parseOriginList(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+        return raw.map(normalizeOrigin).filter(Boolean);
+    }
+    return String(raw)
+        .split(/[,\s]+/)
+        .map(normalizeOrigin)
+        .filter(Boolean);
+}
+
+const STATIC_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:3000",
     "https://nebula-eight-self.vercel.app",   // production — hardcoded safety net
-    process.env.CLIENT_URL,                   // also honour whatever Render has set
-].filter(Boolean);
+];
+
+const ENV_ALLOWED_ORIGINS = [
+    ...parseOriginList(process.env.CLIENT_URL),
+    ...parseOriginList(process.env.CORS_ORIGINS),
+    ...parseOriginList(process.env.ALLOWED_ORIGINS),
+];
+
+const ALLOWED_ORIGINS = Array.from(
+    new Set([...STATIC_ALLOWED_ORIGINS, ...ENV_ALLOWED_ORIGINS].map(normalizeOrigin).filter(Boolean))
+);
 
 const checkOrigin = (origin, callback) => {
     // Allow server-to-server / Postman (no origin header)
     if (!origin) return callback(null, true);
     
-    // Check exact match or match with trailing slash (flexible matching)
-    const normalizedOrigin = origin.replace(/\/$/, "");
-    const isAllowed = ALLOWED_ORIGINS.some(allowed => 
-        normalizedOrigin === allowed.replace(/\/$/, "")
-    );
+    const normalizedOrigin = normalizeOrigin(origin);
+    const isAllowed = ALLOWED_ORIGINS.includes(normalizedOrigin);
 
     if (isAllowed) {
         callback(null, true);
     } else {
-        console.warn(`[CORS] Blocked origin: ${origin}. Allowed: ${ALLOWED_ORIGINS.join(", ")}`);
+        console.warn(`[CORS] Blocked origin: ${origin}. Allowed origins: ${ALLOWED_ORIGINS.join(", ") || "(none configured)"}`);
         callback(new Error(`Origin ${origin} not allowed by CORS`));
     }
 };
@@ -81,9 +102,17 @@ nightResolver.init(io);
 
 app.use(cors(corsOptions));
 app.use(express.json());
+console.log(`[CORS] Allowed origins: ${ALLOWED_ORIGINS.join(", ") || "(none configured)"}`);
 
 // ── REST ──────────────────────────────────────────────────────────────
-app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/api/health", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({
+        status: "ok",
+        ts: Date.now(),
+        uptimeSec: Math.floor(process.uptime()),
+    });
+});
 
 // ── Message builder ───────────────────────────────────────────────────
 function buildMessage(sender, text, channel) {
