@@ -265,6 +265,20 @@ io.on("connection", (socket) => {
     bindAckHandler("room:playAgain", ({ roomId }, cb) => {
         const result = resetRoom(socket.id, roomId);
         if (!result.success) return reply(cb, { success: false, error: result.error });
+        
+        try {
+            const gnosiaChannel = `${roomId}:gnosia`;
+            const roomSockets = io.sockets.adapter.rooms.get(roomId);
+            if (roomSockets) {
+                for (const sid of roomSockets) {
+                    const s = io.sockets.sockets.get(sid);
+                    if (s) s.leave(gnosiaChannel);
+                }
+            }
+        } catch (e) {
+            console.error("Error clearing gnosia channel on playAgain", e);
+        }
+
         const gs = getRoom(roomId);
         if (gs) io.to(roomId).emit("room:backToLobby", sanitizeStateForLobby(gs));
         reply(cb, { success: true });

@@ -191,9 +191,8 @@ export default function PlayerCard({
 }) {
     // Hold-to-emote state
     const cardRef = useRef(null);
-    const holdRafRef = useRef(null);
-    const holdStartRef = useRef(null);
-    const [holdProgress, setHoldProgress] = useState(0);
+    const holdTimerRef = useRef(null);
+    const [isHolding, setIsHolding] = useState(false);
 
     const HOLD_MS = 2000;
 
@@ -202,30 +201,20 @@ export default function PlayerCard({
         // Only primary button / first touch
         if (e.pointerType === "mouse" && e.button !== 0) return;
         e.preventDefault();
-        holdStartRef.current = Date.now();
-        const tick = () => {
-            if (!holdStartRef.current) return;
-            const pct = Math.min(100, ((Date.now() - holdStartRef.current) / HOLD_MS) * 100);
-            setHoldProgress(pct);
-            if (pct < 100) {
-                holdRafRef.current = requestAnimationFrame(tick);
-            } else {
-                holdStartRef.current = null;
-                setHoldProgress(0);
-                const rect = cardRef.current?.getBoundingClientRect();
-                if (rect) onHoldComplete(rect.left + rect.width / 2, rect.top + rect.height / 2);
-            }
-        };
-        holdRafRef.current = requestAnimationFrame(tick);
+        setIsHolding(true);
+        holdTimerRef.current = setTimeout(() => {
+            setIsHolding(false);
+            const rect = cardRef.current?.getBoundingClientRect();
+            if (rect) onHoldComplete(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        }, HOLD_MS);
     }
 
     function cancelHold() {
-        cancelAnimationFrame(holdRafRef.current);
-        holdStartRef.current = null;
-        setHoldProgress(0);
+        clearTimeout(holdTimerRef.current);
+        setIsHolding(false);
     }
 
-    useEffect(() => () => cancelAnimationFrame(holdRafRef.current), []);
+    useEffect(() => () => clearTimeout(holdTimerRef.current), []);
     const color = AVATAR_COLORS[player.profileId] || "#c8b8ff";
     const isAlly = gnosiaAllies.includes(player.id);
     const isDead = !player.alive;
@@ -442,7 +431,7 @@ export default function PlayerCard({
                     borderRadius: 16,
                     boxShadow: shadow !== "none" ? shadow : "0 8px 32px 0 rgba(0, 0, 0, 0.4)",
                     cursor: isMe && onHoldComplete
-                        ? (holdProgress > 0 ? "grabbing" : "grab")
+                        ? (isHolding ? "grabbing" : "grab")
                         : (!canSelect || isDead ? "default" : "pointer"),
                     opacity: isDead ? (hasAura ? 0.94 : 0.7) : 1,
                     transition: "all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)",
@@ -706,30 +695,22 @@ export default function PlayerCard({
                         </div>
 
                         {/* Hold-to-emote progress ring */}
-                        {isMe && onHoldComplete && holdProgress > 0 && (
+                        {isMe && onHoldComplete && (
                             <svg
+                                className="hold-ring-svg"
                                 style={{
-                                    position: "absolute",
-                                    inset: -3,
                                     width: avatarSize + 6,
                                     height: avatarSize + 6,
-                                    zIndex: 25,
-                                    pointerEvents: "none",
-                                    overflow: "visible",
                                 }}
                                 viewBox={`0 0 ${avatarSize + 6} ${avatarSize + 6}`}
                             >
                                 <circle
+                                    className={`hold-ring-circle ${isHolding ? 'active' : ''}`}
                                     cx={(avatarSize + 6) / 2}
                                     cy={(avatarSize + 6) / 2}
                                     r={(avatarSize + 6) / 2 - 2.5}
-                                    stroke="#c8b8ff"
-                                    strokeWidth="2.5"
-                                    fill="none"
                                     strokeDasharray={`${2 * Math.PI * ((avatarSize + 6) / 2 - 2.5)}`}
-                                    strokeDashoffset={`${2 * Math.PI * ((avatarSize + 6) / 2 - 2.5) * (1 - holdProgress / 100)}`}
-                                    transform={`rotate(-90 ${(avatarSize + 6) / 2} ${(avatarSize + 6) / 2})`}
-                                    strokeLinecap="round"
+                                    strokeDashoffset={`${2 * Math.PI * ((avatarSize + 6) / 2 - 2.5)}`}
                                 />
                             </svg>
                         )}
