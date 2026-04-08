@@ -476,14 +476,8 @@ export default function Game({ session, socket, onLeaveRoom, musicVolume, setMus
     const { roomId, myId, myRole, allies: initialAllies = [], gnosiaCount } = session;
     const { reconnecting } = useSocket();
 
-    // Prevent Render.com 15m idle shutdown by sending HTTP requests
-    useEffect(() => {
-        const url = import.meta.env.VITE_SERVER_URL || "";
-        const keepAwakeId = setInterval(() => {
-            fetch(`${url}/api/health`, { method: "GET" }).catch(() => {});
-        }, 5 * 60 * 1000);
-        return () => clearInterval(keepAwakeId);
-    }, []);
+    // Note: Render.com keep-awake heartbeat has been moved to App.jsx to ensure
+    // it runs across all screens including the Lobby.
 
     const [players,       setPlayers]       = useState(session.lastPhasePayload?.players || []);
     const [allies,        setAllies]        = useState(initialAllies);

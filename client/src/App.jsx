@@ -206,6 +206,22 @@ export default function App() {
         });
     }, [socket]);
 
+    // Render.com Keep-Awake Heartbeat
+    // Pings the server every 5 minutes to prevent the free tier from sleeping.
+    // Also pings immediately on mount to trigger a "cold start" wake-up as early as possible.
+    useEffect(() => {
+        const url = import.meta.env.VITE_SERVER_URL || "";
+        const ping = () => {
+            fetch(`${url}/api/health`).catch(() => {});
+        };
+
+        // Immediate wake-up call
+        ping();
+
+        const interval = setInterval(ping, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, []);
+
     useEffect(() => {
         function onConnect() {
             tryResumeSession();

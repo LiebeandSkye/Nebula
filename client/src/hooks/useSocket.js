@@ -27,7 +27,7 @@ function getSocket() {
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 15000,
-            timeout: 20000,
+            timeout: 60000,
             // Prefer WebSocket — avoids HTTP-polling CORS errors on Render cold-start.
             // Falls back to polling automatically if WebSocket is unavailable.
             transports: ["websocket", "polling"],
