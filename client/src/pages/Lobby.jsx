@@ -102,8 +102,8 @@ export default function Lobby({
     // Emote state for lobby
     const [lobbyEmotes,    setLobbyEmotes]    = useState({});
     const [lobbyEmoteWheel, setLobbyEmoteWheel] = useState(null);
-    const lobbyHoldRafRef   = useRef(null);
-    const lobbyHoldStartRef = useRef(null);
+    const [lobbyIsHolding, setLobbyIsHolding] = useState(false);
+    const lobbyTimerRef   = useRef(null);
     const lobbyAvatarRef    = useRef(null);
     const lobbyEmoteTimers  = useRef({});
 
@@ -145,9 +145,13 @@ export default function Lobby({
     useSocketEvent("music:state", (payload) => setMusicState(payload));
     useSocketEvent("player:emote", ({ playerId, emote }) => {
         setLobbyEmotes(prev => ({ ...prev, [playerId]: emote }));
-        clearTimeout(lobbyEmoteTimers.current[playerId]);
+        // Clear existing timer before setting new one to prevent memory leaks
+        if (lobbyEmoteTimers.current[playerId]) {
+            clearTimeout(lobbyEmoteTimers.current[playerId]);
+        }
         lobbyEmoteTimers.current[playerId] = setTimeout(() => {
             setLobbyEmotes(prev => { const n = { ...prev }; delete n[playerId]; return n; });
+            delete lobbyEmoteTimers.current[playerId];
         }, 5000);
     });
 
@@ -160,6 +164,16 @@ export default function Lobby({
         setScreen("waiting");
     }, [resumeFrom]);
 
+    // Cleanup emote timers on unmount
+    useEffect(() => {
+        return () => {
+            Object.values(lobbyEmoteTimers.current).forEach(timerId => {
+                clearTimeout(timerId);
+            });
+            lobbyEmoteTimers.current = {};
+        };
+    }, []);
+
     const takenProfiles = lobbyState?.players.map(p => p.profileId) || [];
     const amHost = lobbyState?.players.find(p => p.id === myId && p.isHost);
     const canStart = amHost && (lobbyState?.players.length || 0) >= 2 && !loading;
@@ -167,24 +181,17 @@ export default function Lobby({
     function lobbyStartHold(e) {
         if (e.pointerType === "mouse" && e.button !== 0) return;
         e.preventDefault();
-        lobbyHoldStartRef.current = Date.now();
-        const tick = () => {
-            if (!lobbyHoldStartRef.current) return;
-            const pct = Math.min(100, ((Date.now() - lobbyHoldStartRef.current) / 2000) * 100);
-            if (pct < 100) {
-                lobbyHoldRafRef.current = requestAnimationFrame(tick);
-            } else {
-                lobbyHoldStartRef.current = null;
-                const rect = lobbyAvatarRef.current?.getBoundingClientRect();
-                if (rect && roomId) setLobbyEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes() });
-            }
-        };
-        lobbyHoldRafRef.current = requestAnimationFrame(tick);
+        setLobbyIsHolding(true);
+        lobbyTimerRef.current = setTimeout(() => {
+            setLobbyIsHolding(false);
+            const rect = lobbyAvatarRef.current?.getBoundingClientRect();
+            if (rect && roomId) setLobbyEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes() });
+        }, 2000);
     }
 
     function lobbyCancelHold() {
-        cancelAnimationFrame(lobbyHoldRafRef.current);
-        lobbyHoldStartRef.current = null;
+        clearTimeout(lobbyTimerRef.current);
+        setLobbyIsHolding(false);
     }
 
     async function handleCreate() {
@@ -413,9 +420,23 @@ export default function Lobby({
                                         onPointerUp={p.id === myId ? lobbyCancelHold : undefined}
                                         onPointerLeave={p.id === myId ? lobbyCancelHold : undefined}
                                         onPointerCancel={p.id === myId ? lobbyCancelHold : undefined}
-                                        style={{ cursor: p.id === myId ? "grab" : "default", touchAction: p.id === myId ? "none" : undefined }}
+                                        style={{ 
+                                            position: "relative",
+                                            cursor: p.id === myId ? (lobbyIsHolding ? "grabbing" : "grab") : "default", 
+                                            touchAction: p.id === myId ? "none" : undefined 
+                                        }}
                                     >
                                         <Avatar profileId={p.profileId} username={p.username} size={44} />
+                                        {p.id === myId && (
+                                            <svg className="hold-ring-svg" style={{ width: 50, height: 50, left: -3, top: -3 }} viewBox="0 0 50 50">
+                                                <circle
+                                                    className={`hold-ring-circle ${lobbyIsHolding ? 'active' : ''}`}
+                                                    cx="25" cy="25" r="22"
+                                                    strokeDasharray={`${2 * Math.PI * 22}`}
+                                                    strokeDashoffset={`${2 * Math.PI * 22}`}
+                                                />
+                                            </svg>
+                                        )}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{

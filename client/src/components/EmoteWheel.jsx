@@ -46,11 +46,16 @@ export default function EmoteWheel({ cx, cy, emotes, onSelect, onClose }) {
     const [hoveredIndex, setHoveredIndex] = useState(-1);
 
     useEffect(() => {
+        let rafId = null;
         const onMove = (e) => {
-            const px = e.clientX ?? e.touches?.[0]?.clientX;
-            const py = e.clientY ?? e.touches?.[0]?.clientY;
-            if (px == null) return;
-            setHoveredIndex(getHoveredIndex(cx, cy, px, py));
+            if (rafId) return; // Throttle using RAF
+            rafId = requestAnimationFrame(() => {
+                const px = e.clientX ?? e.touches?.[0]?.clientX;
+                const py = e.clientY ?? e.touches?.[0]?.clientY;
+                if (px == null) return;
+                setHoveredIndex(getHoveredIndex(cx, cy, px, py));
+                rafId = null;
+            });
         };
         const onUp = (e) => {
             const t = e.changedTouches?.[0];
@@ -58,7 +63,14 @@ export default function EmoteWheel({ cx, cy, emotes, onSelect, onClose }) {
             const py = t ? t.clientY : e.clientY;
             if (px != null) {
                 const idx = getHoveredIndex(cx, cy, px, py);
-                if (idx >= 0 && emotes[idx]) { onSelect(emotes[idx]); return; }
+                if (idx >= 0 && emotes && emotes[idx]) {
+                    try {
+                        onSelect(emotes[idx]);
+                        return;
+                    } catch (error) {
+                        console.error('Error selecting emote:', error);
+                    }
+                }
             }
             onClose();
         };
@@ -70,6 +82,7 @@ export default function EmoteWheel({ cx, cy, emotes, onSelect, onClose }) {
         window.addEventListener("touchend",  onUp);
         window.addEventListener("keydown",   onKey);
         return () => {
+            if (rafId) cancelAnimationFrame(rafId);
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("touchmove", onMove);
             window.removeEventListener("mouseup",   onUp);
@@ -121,7 +134,7 @@ export default function EmoteWheel({ cx, cy, emotes, onSelect, onClose }) {
                     }}>
                         <img
                             src={emote.src}
-                            alt={emote.label}
+                            alt={`Emote: ${emote.label}`}
                             style={{
                                 width: hovered ? 38 : 32,
                                 height: hovered ? 38 : 32,
@@ -158,7 +171,7 @@ export default function EmoteWheel({ cx, cy, emotes, onSelect, onClose }) {
                 {hoveredIndex >= 0 ? (
                     <img
                         src={emotes[hoveredIndex]?.src}
-                        alt=""
+                        alt={`Preview: ${emotes[hoveredIndex]?.label || 'emote'}`}
                         style={{
                             width: 28, height: 28,
                             objectFit: "cover",

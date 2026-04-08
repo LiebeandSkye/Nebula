@@ -220,36 +220,25 @@ function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolu
     const dragStateRef = useRef(null);
 
     // Emote wheel state for game-over screen
-    const holdRafRef   = useRef(null);
-    const holdStartRef = useRef(null);
+    const holdTimerRef   = useRef(null);
     const avatarRefs   = useRef({});
-    const [goHoldProgress, setGoHoldProgress] = useState(0);
+    const [goIsHolding, setGoIsHolding] = useState(false);
     const [goEmoteWheel,   setGoEmoteWheel]   = useState(null);
 
     function goStartHold(playerId, e) {
         if (e.pointerType === "mouse" && e.button !== 0) return;
         e.preventDefault();
-        holdStartRef.current = Date.now();
-        const tick = () => {
-            if (!holdStartRef.current) return;
-            const pct = Math.min(100, ((Date.now() - holdStartRef.current) / 2000) * 100);
-            setGoHoldProgress(pct);
-            if (pct < 100) {
-                holdRafRef.current = requestAnimationFrame(tick);
-            } else {
-                holdStartRef.current = null;
-                setGoHoldProgress(0);
-                const rect = avatarRefs.current[playerId]?.getBoundingClientRect();
-                if (rect) setGoEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes() });
-            }
-        };
-        holdRafRef.current = requestAnimationFrame(tick);
+        setGoIsHolding(true);
+        holdTimerRef.current = setTimeout(() => {
+            setGoIsHolding(false);
+            const rect = avatarRefs.current[playerId]?.getBoundingClientRect();
+            if (rect) setGoEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes() });
+        }, 2000);
     }
 
     function goCancelHold() {
-        cancelAnimationFrame(holdRafRef.current);
-        holdStartRef.current = null;
-        setGoHoldProgress(0);
+        clearTimeout(holdTimerRef.current);
+        setGoIsHolding(false);
     }
 
     function startVolumePanelDrag(event) {
@@ -334,18 +323,20 @@ function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolu
                                     onPointerUp={isMe ? goCancelHold : undefined}
                                     onPointerLeave={isMe ? goCancelHold : undefined}
                                     onPointerCancel={isMe ? goCancelHold : undefined}
-                                    style={{ width: 40, height: 40, flexShrink: 0, border: `2px solid ${ac}55`, background: ac + "15", overflow: "hidden", position: "relative", cursor: isMe ? (goHoldProgress > 0 ? "grabbing" : "grab") : "default", touchAction: isMe ? "none" : undefined }}>
+                                    style={{ width: 40, height: 40, flexShrink: 0, border: `2px solid ${ac}55`, background: ac + "15", overflow: "hidden", position: "relative", cursor: isMe ? (goIsHolding ? "grabbing" : "grab") : "default", touchAction: isMe ? "none" : undefined }}>
                                     <img src={`/profiles/${p.profileId}.jpg`} alt={p.username} style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                         onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
                                     <div style={{ display: "none", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", color: ac, fontSize: 16, fontWeight: "bold" }}>
                                         {p.username[0].toUpperCase()}
                                     </div>
-                                    {isMe && goHoldProgress > 0 && (
-                                        <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} viewBox="0 0 40 40">
-                                            <circle cx="20" cy="20" r="17" stroke="#c8b8ff" strokeWidth="2.5" fill="none"
+                                    {isMe && (
+                                        <svg className="hold-ring-svg" viewBox="0 0 40 40">
+                                            <circle
+                                                className={`hold-ring-circle ${goIsHolding ? 'active' : ''}`}
+                                                cx="20" cy="20" r="17"
                                                 strokeDasharray={`${2 * Math.PI * 17}`}
-                                                strokeDashoffset={`${2 * Math.PI * 17 * (1 - goHoldProgress / 100)}`}
-                                                transform="rotate(-90 20 20)" strokeLinecap="round" />
+                                                strokeDashoffset={`${2 * Math.PI * 17}`}
+                                            />
                                         </svg>
                                     )}
                                 </div>
@@ -484,6 +475,15 @@ function VoteProgressBar({ votesCast, totalAlive }) {
 export default function Game({ session, socket, onLeaveRoom, musicVolume, setMusicVolume, musicMuted, setMusicMuted }) {
     const { roomId, myId, myRole, allies: initialAllies = [], gnosiaCount } = session;
     const { reconnecting } = useSocket();
+
+    // Prevent Render.com 15m idle shutdown by sending HTTP requests
+    useEffect(() => {
+        const url = import.meta.env.VITE_SERVER_URL || "";
+        const keepAwakeId = setInterval(() => {
+            fetch(`${url}/api/health`, { method: "GET" }).catch(() => {});
+        }, 5 * 60 * 1000);
+        return () => clearInterval(keepAwakeId);
+    }, []);
 
     const [players,       setPlayers]       = useState(session.lastPhasePayload?.players || []);
     const [allies,        setAllies]        = useState(initialAllies);
