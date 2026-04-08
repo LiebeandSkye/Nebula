@@ -35,7 +35,7 @@ const AURA_ROLL_OPTIONS = [
     "aura-sparkle-red",
 ];
 
-// Always-safe origin allowlist: never blocks prod even if env var is missing.
+// ── CORS & Socket.io Configuration ───────────────────────────────────
 const ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:3000",
@@ -43,19 +43,34 @@ const ALLOWED_ORIGINS = [
     process.env.CLIENT_URL,                   // also honour whatever Render has set
 ].filter(Boolean);
 
+const checkOrigin = (origin, callback) => {
+    // Allow server-to-server / Postman (no origin header)
+    if (!origin) return callback(null, true);
+    
+    // Check exact match or match with trailing slash (flexible matching)
+    const normalizedOrigin = origin.replace(/\/$/, "");
+    const isAllowed = ALLOWED_ORIGINS.some(allowed => 
+        normalizedOrigin === allowed.replace(/\/$/, "")
+    );
+
+    if (isAllowed) {
+        callback(null, true);
+    } else {
+        console.warn(`[CORS] Blocked origin: ${origin}. Allowed: ${ALLOWED_ORIGINS.join(", ")}`);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+    }
+};
+
+const corsOptions = {
+    origin: checkOrigin,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+};
+
 const io = new Server(httpServer, {
-    cors: {
-        origin: (origin, callback) => {
-            // Allow server-to-server / Postman (no origin header)
-            if (!origin) return callback(null, true);
-            if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-            console.warn(`[CORS] Blocked origin: ${origin}`);
-            callback(new Error(`Origin ${origin} not allowed by CORS`));
-        },
-        methods: ["GET", "POST"],
-        credentials: true,
-    },
-    // Force websocket-first — avoids the polling CORS issue entirely on Render
+    cors: corsOptions,
+    // websocket-first helps bypass handshake instability on many cloud providers
     transports: ["websocket", "polling"],
     pingTimeout: 20000,
     pingInterval: 25000,
@@ -64,7 +79,7 @@ const io = new Server(httpServer, {
 stateMachine.init(io);
 nightResolver.init(io);
 
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // ── REST ──────────────────────────────────────────────────────────────
