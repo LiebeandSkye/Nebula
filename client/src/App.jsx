@@ -321,6 +321,10 @@ export default function App() {
 
     // Render keep-awake heartbeat (best effort).
     useEffect(() => {
+        const ping = () => {
+            wakeProbe().catch(() => {});
+        };
+
         ping();
         // Heartbeat every 2 minutes to be safe (Render has a 15 min idle timeout)
         const interval = setInterval(ping, 2 * 60 * 1000);
