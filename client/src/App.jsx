@@ -16,8 +16,8 @@ const ROLE_ICONS = { gnosia: "👁", engineer: "⚡", doctor: "☤", guardian: "
 
 const SERVER_BASE_URL = (import.meta.env.VITE_SERVER_URL || "").replace(/\/$/, "");
 const HEALTH_URL = SERVER_BASE_URL ? `${SERVER_BASE_URL}/api/health` : "/api/health";
-const WAKE_ATTEMPT_DELAYS_MS = [0, 1200, 2200, 3500, 5000, 7000, 9000];
-const RECONNECT_BACKOFF_MS = [1500, 2500, 4000, 6000, 9000, 12000];
+const WAKE_ATTEMPT_DELAYS_MS = [0, 500, 1000, 2000, 3000, 5000];
+const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 4000, 7000, 10000];
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -321,12 +321,9 @@ export default function App() {
 
     // Render keep-awake heartbeat (best effort).
     useEffect(() => {
-        const ping = () => {
-            wakeProbe().catch(() => {});
-        };
-
         ping();
-        const interval = setInterval(ping, 5 * 60 * 1000);
+        // Heartbeat every 2 minutes to be safe (Render has a 15 min idle timeout)
+        const interval = setInterval(ping, 2 * 60 * 1000);
         return () => clearInterval(interval);
     }, []);
 

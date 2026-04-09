@@ -28,6 +28,7 @@ function createGameState(roomId, settings = {}) {
         roomId,
         phase: "LOBBY",
         round: 0,
+        lastActivityAt: now,
         meta: {
             phaseSeq: 0,
             nightResolvedSeq: null,
