@@ -11,7 +11,7 @@ import { clearPlaySession, loadPlaySession } from "./lib/sessionPersistence.js";
 const isGnosiaRole = (role) => role === "gnosia" || role === "illusionist";
 
 const ROLE_COLORS = {
-    gnosia: "#9b30ff", illusionist: "#c46bff", engineer: "#00f5ff", doctor: "#b0ffb8",
+    gnosia: "#9b30ff", illusionist: "#9b30ff", engineer: "#00f5ff", doctor: "#b0ffb8",
     guardian: "#ffd700", human: "#c8b8ff", lawyer: "#ff8833", traitor: "#ff4040",
 };
 const ROLE_ICONS = { gnosia: "👁", engineer: "⚡", doctor: "☤", guardian: "🛡", human: "◈", lawyer: "⚖", traitor: "◈" };
@@ -146,7 +146,7 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
             position: "fixed",
             inset: 0,
             zIndex: 1000001,
-            background: "radial-gradient(circle at top, rgba(196,107,255,0.2), rgba(12,0,22,0.98) 60%)",
+            background: "radial-gradient(circle at top, rgba(155,48,255,0.2), rgba(12,0,22,0.98) 60%)",
             backdropFilter: "blur(6px)",
             display: "flex",
             alignItems: "center",
@@ -155,8 +155,8 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
         }}>
             <div style={{
                 width: "min(820px, 96vw)",
-                border: "1px solid rgba(196,107,255,0.75)",
-                boxShadow: "0 0 0 1px rgba(196,107,255,0.18), 0 0 36px rgba(155,48,255,0.28)",
+                border: "1px solid rgba(155,48,255,0.75)",
+                boxShadow: "0 0 0 1px rgba(155,48,255,0.18), 0 0 36px rgba(155,48,255,0.28)",
                 background: "linear-gradient(180deg, rgba(30,0,48,0.96), rgba(11,0,24,0.96))",
                 padding: 28,
             }}>
@@ -164,7 +164,7 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                     <div style={{ fontSize: 10, color: "#8f68b5", letterSpacing: "0.22em", marginBottom: 10 }}>
                         ILLUSIONIST SEQUENCE
                     </div>
-                    <div style={{ fontSize: 24, color: "#dca1ff", textShadow: "0 0 18px rgba(196,107,255,0.85)" }}>
+                    <div style={{ fontSize: 24, color: "#dca1ff", textShadow: "0 0 18px rgba(155,48,255,0.85)" }}>
                         {isPrompt ? "Choose Someone To Infect" : "Illusionist Is Manifesting..."}
                     </div>
                     <div style={{ fontSize: 9, color: "#bda0d8", lineHeight: 1.9, marginTop: 12 }}>
@@ -188,10 +188,10 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                                     onClick={() => setSelectedId(candidate.id)}
                                     disabled={submitting}
                                     style={{
-                                        border: `1px solid ${selectedId === candidate.id ? "#dca1ff" : "rgba(196,107,255,0.26)"}`,
-                                        background: selectedId === candidate.id ? "rgba(196,107,255,0.16)" : "rgba(15,0,26,0.72)",
+                                        border: `1px solid ${selectedId === candidate.id ? "#dca1ff" : "rgba(155,48,255,0.26)"}`,
+                                        background: selectedId === candidate.id ? "rgba(155,48,255,0.16)" : "rgba(15,0,26,0.72)",
                                         color: selectedId === candidate.id ? "#f6ddff" : "#d8c1f0",
-                                        boxShadow: selectedId === candidate.id ? "0 0 22px rgba(196,107,255,0.2)" : "none",
+                                        boxShadow: selectedId === candidate.id ? "0 0 22px rgba(155,48,255,0.2)" : "none",
                                         padding: 14,
                                         cursor: submitting ? "not-allowed" : "pointer",
                                         textAlign: "center",
@@ -201,7 +201,7 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                                         width: 62,
                                         height: 62,
                                         margin: "0 auto 10px",
-                                        border: "2px solid rgba(196,107,255,0.36)",
+                                        border: "2px solid rgba(155,48,255,0.36)",
                                         overflow: "hidden",
                                     }}>
                                         <img
@@ -246,7 +246,7 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                                     flex: "1 1 240px",
                                     borderColor: "#dca1ff55",
                                     color: "#dca1ff",
-                                    background: "rgba(196,107,255,0.08)",
+                                    background: "rgba(155,48,255,0.08)",
                                 }}
                                 disabled={submitting}
                                 onClick={() => submitChoice("random")}>
@@ -256,12 +256,12 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                     </>
                 ) : (
                     <div style={{
-                        border: "1px solid rgba(196,107,255,0.26)",
+                        border: "1px solid rgba(155,48,255,0.26)",
                         background: "rgba(21,0,38,0.58)",
                         padding: 28,
                         textAlign: "center",
                     }}>
-                        <div style={{ fontSize: 48, color: "#dca1ff", marginBottom: 14, textShadow: "0 0 18px rgba(196,107,255,0.9)" }}>
+                        <div style={{ fontSize: 48, color: "#dca1ff", marginBottom: 14, textShadow: "0 0 18px rgba(155,48,255,0.9)" }}>
                             I
                         </div>
                         <div style={{ fontSize: 10, color: "#f2d5ff", lineHeight: 2 }}>

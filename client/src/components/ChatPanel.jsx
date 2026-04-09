@@ -300,7 +300,7 @@ export default function ChatPanel({
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{
                             width: 24, height: 24, borderRadius: "50%", 
-                            overflow: "hidden", border: "1px solid #c46bff"
+                            overflow: "hidden", border: "1px solid #9b30ff"
                         }}>
                             <img 
                                 src={`/profiles/${impersonatingId ? players.find(p => p.id === impersonatingId)?.profileId : players.find(p => p.id === myId)?.profileId}.jpg`} 
@@ -319,7 +319,7 @@ export default function ChatPanel({
                     <button 
                         onClick={() => setShowImpersonateModal(true)}
                         className="btn" 
-                        style={{ padding: "4px 8px", fontSize: 8, borderColor: "#c46bff", color: "#c46bff" }}>
+                        style={{ padding: "4px 8px", fontSize: 8, borderColor: "#9b30ff", color: "#9b30ff" }}>
                         SWITCH
                     </button>
                 </div>
@@ -364,8 +364,8 @@ export default function ChatPanel({
                     display: "flex", flexDirection: "column",
                     animation: "fadeInUp 0.2s ease"
                 }}>
-                    <div style={{ padding: 12, borderBottom: "1px solid #c46bff44", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: 9, color: "#c46bff", fontFamily: "Press Start 2P" }}>SHAPESHIFT</span>
+                    <div style={{ padding: 12, borderBottom: "1px solid #9b30ff44", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 9, color: "#9b30ff", fontFamily: "Press Start 2P" }}>SHAPESHIFT</span>
                         <button onClick={() => setShowImpersonateModal(false)} style={{ background: "transparent", border: "none", color: "#ff2a2a", cursor: "pointer", fontSize: 12 }}>✕</button>
                     </div>
                     <div style={{ padding: 12 }}>
@@ -374,7 +374,7 @@ export default function ChatPanel({
                             value={impersonateSearch}
                             onChange={e => setImpersonateSearch(e.target.value)}
                             style={{ 
-                                width: "100%", background: "#000", border: "1px solid #c46bff44", 
+                                width: "100%", background: "#000", border: "1px solid #9b30ff44", 
                                 color: "#fff", padding: "8px", fontSize: 10, outline: "none",
                                 fontFamily: "sans-serif"
                             }} 
@@ -384,12 +384,12 @@ export default function ChatPanel({
                         <button 
                             onClick={() => { setImpersonatingId(null); setShowImpersonateModal(false); }}
                             style={{ 
-                                padding: 12, background: !impersonatingId ? "#c46bff22" : "#1a0f2e", 
-                                border: `1px solid ${!impersonatingId ? "#c46bff" : "#1a0f2e"}`,
+                                padding: 12, background: !impersonatingId ? "#9b30ff22" : "#1a0f2e", 
+                                border: `1px solid ${!impersonatingId ? "#9b30ff" : "#1a0f2e"}`,
                                 color: "#e0d4ff", cursor: "pointer", textAlign: "left", fontSize: 10,
                                 display: "flex", alignItems: "center", gap: 10
                             }}>
-                            <div style={{ width: 24, height: 24, borderRadius: "50%", overflow: "hidden", border: "1px solid #c46bff" }}>
+                            <div style={{ width: 24, height: 24, borderRadius: "50%", overflow: "hidden", border: "1px solid #9b30ff" }}>
                                 <img src={`/profiles/${players.find(p => p.id === myId)?.profileId}.jpg`} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => e.target.style.display="none"} />
                             </div>
                             <span>Return to True Form (Yourself)</span>
@@ -399,8 +399,8 @@ export default function ChatPanel({
                                 key={p.id}
                                 onClick={() => { setImpersonatingId(p.id); setShowImpersonateModal(false); }}
                                 style={{ 
-                                    padding: 12, background: impersonatingId === p.id ? "#c46bff22" : "#1a0f2e", 
-                                    border: `1px solid ${impersonatingId === p.id ? "#c46bff" : "#1a0f2e"}`,
+                                    padding: 12, background: impersonatingId === p.id ? "#9b30ff22" : "#1a0f2e", 
+                                    border: `1px solid ${impersonatingId === p.id ? "#9b30ff" : "#1a0f2e"}`,
                                     color: "#e0d4ff", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 10
                                 }}>
                                 <div style={{ width: 24, height: 24, borderRadius: "50%", overflow: "hidden" }}>

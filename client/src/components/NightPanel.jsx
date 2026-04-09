@@ -12,7 +12,7 @@ const ROLE_META = {
         actionLabel: "KILL", filterFn: (p, myId, allies = []) => p.alive && p.id !== myId && !allies.some(a => a.id === p.id)
     },
     illusionist: {
-        icon: "I", color: "#c46bff", heading: "COORDINATE THE KILL",
+        icon: "I", color: "#9b30ff", heading: "COORDINATE THE KILL",
         instruction: "Your infection is complete. Vote with the Gnosia to eliminate one human target.",
         actionLabel: "KILL", filterFn: (p, myId, allies = []) => p.alive && p.id !== myId && !allies.some(a => a.id === p.id)
     },

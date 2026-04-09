@@ -125,6 +125,7 @@ const AURA_PREVIEW = {
 const ROLE_COLORS = {
     gnosia: "#9b30ff", engineer: "#00f5ff", doctor: "#b0ffb8",
     guardian: "#ffd700", human: "#c8b8ff", lawyer: "#ff8833", traitor: "#ff4040",
+    illusionist: "#9b30ff",
 };
 const ROLE_INFO = {
     gnosia:   { icon: "👁", desc: "Deceive the crew. Each night, coordinate with your allies to eliminate one human. You win when Gnosia outnumber humans." },
@@ -137,6 +138,7 @@ const ROLE_INFO = {
     illusionist: { icon: "🎭", desc: "Before the mission begins, infect one crew member to turn them into Gnosia. After that, you act exactly like Gnosia and appear as Gnosia to all checks." },
     
 };
+const isGnosiaRole = (role) => role === "gnosia" || role === "illusionist";
 
 function PhaseTimer({ endsAt, color }) {
     const [rem, setRem] = useState(0);
@@ -575,7 +577,7 @@ export default function Game({
 
     // Auto-switch channel based on phase
     useEffect(() => {
-        if (phase === "NIGHT" && myRole === "gnosia") {
+        if (phase === "NIGHT" && isGnosiaRole(myRole)) {
             setActiveChatTab("gnosia");
         } else if (phase === "DAY_DISCUSSION") {
             setActiveChatTab("public");
@@ -593,7 +595,7 @@ export default function Game({
         if (!label) return;
         const sys = { id: Date.now(), type: "system", text: label };
         setPubMsgs(p => [...p, sys]);
-        if (myRole === "gnosia") setGnMsgs(p => [...p, sys]);
+        if (isGnosiaRole(myRole)) setGnMsgs(p => [...p, sys]);
     });
 
     const handleClearUnread = (tab) => {
@@ -636,7 +638,7 @@ export default function Game({
     }
 
     useSocketEvent("game:roleAssigned", rolePayload => {
-        if (rolePayload.role === "gnosia" && rolePayload.gnosiaAllies) setAllies(rolePayload.gnosiaAllies);
+        if (isGnosiaRole(rolePayload.role) && rolePayload.gnosiaAllies) setAllies(rolePayload.gnosiaAllies);
     });
 
     useSocketEvent("phase:changed", ({ phase: p, round: r, timers: t, players: pl, skipVotes: sv, morningReport: mr }) => {
@@ -723,7 +725,7 @@ export default function Game({
         if (nightSubmitted) return;
         const target = skipArg === "skip" ? "skip" : selectedTarget;
         if (!target) return;
-        const map = { gnosia: "gnosia_vote", engineer: "engineer", doctor: "doctor", guardian: "guardian" };
+        const map = { gnosia: "gnosia_vote", illusionist: "gnosia_vote", engineer: "engineer", doctor: "doctor", guardian: "guardian" };
         const actionType = map[myRole];
         if (!actionType) return;
         socket.emit("night:action", { roomId, actionType, targetId: target }, res => {
@@ -1099,7 +1101,7 @@ export default function Game({
             {topBar}
             {isMobile ? (
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                    {!(isNight && myRole === "gnosia") && (
+                    {! (isNight && isGnosiaRole(myRole)) && (
                         <div style={{ flexShrink: 0, borderBottom: "1px solid #1a0a2a", background: "#07000f", overflowY: "auto", maxHeight: 210 }}>
                             <div style={{ padding: "10px 12px" }}>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>

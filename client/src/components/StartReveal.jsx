@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 const ROLE_COLORS = {
     gnosia: "#9b30ff", engineer: "#00f5ff", doctor: "#b0ffb8",
-    illusionist: "#c46bff", guardian: "#ffd700", human: "#c8b8ff", lawyer: "#ff8833", traitor: "#ff4040",
+    illusionist: "#9b30ff", guardian: "#ffd700", human: "#c8b8ff", lawyer: "#ff8833", traitor: "#ff4040",
 };
 
 export default function StartReveal({ players, gnosiaCount, myId, myRole, onDismiss }) {
