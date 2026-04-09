@@ -43,6 +43,9 @@ const ROLE_DESCRIPTIONS = {
     traitor:  "You have no special ability, but you appear human to all scans and inspections. You win with the Gnosia.",
 };
 
+ROLE_DESCRIPTIONS.traitor = "50% chance to appear. If chosen, you have no special ability, appear human to all scans and inspections, and win with the Gnosia.";
+ROLE_DESCRIPTIONS.illusionist = "One Gnosia becomes the Illusionist. Before the mission begins, they infect one player and add 1 more Gnosia to the match.";
+
 function SettingToggle({ label, desc, checked, onChange, onInfo }) {
     return (
         <label style={{
@@ -93,7 +96,7 @@ export default function Lobby({
     const [volumePanelPosition, setVolumePanelPosition] = useState({ x: null, y: null });
     const [settings, setSettings] = useState({
         password: "", hasEngineer: false, hasDoctor: false,
-        hasGuardian: false, hasLawyer: false, hasTraitor: false, gnosiaCount: "",
+        hasGuardian: false, hasLawyer: false, hasTraitor: false, hasIllusionist: false, gnosiaCount: "",
         lobbyMusicEnabled: true, endGameMusicEnabled: true,
     });
     const dragStateRef = useRef(null);
@@ -116,6 +119,7 @@ export default function Lobby({
             hasGuardian: !!state.settings.hasGuardian,
             hasLawyer: !!state.settings.hasLawyer,
             hasTraitor: !!state.settings.hasTraitor,
+            hasIllusionist: !!state.settings.hasIllusionist,
             gnosiaCount: state.settings.gnosiaCount ?? "",
             lobbyMusicEnabled: state.settings.lobbyMusicEnabled !== false,
             endGameMusicEnabled: state.settings.endGameMusicEnabled !== false,
@@ -209,6 +213,7 @@ export default function Lobby({
                 hasGuardian: settings.hasGuardian,
                 hasLawyer: settings.hasLawyer,
                 hasTraitor: settings.hasTraitor,
+                hasIllusionist: settings.hasIllusionist,
                 gnosiaCount: settings.gnosiaCount ? parseInt(settings.gnosiaCount) : null,
                 lobbyMusicEnabled: settings.lobbyMusicEnabled,
                 endGameMusicEnabled: settings.endGameMusicEnabled,
@@ -270,6 +275,7 @@ export default function Lobby({
                 hasGuardian: next.hasGuardian,
                 hasLawyer: next.hasLawyer,
                 hasTraitor: next.hasTraitor,
+                hasIllusionist: next.hasIllusionist,
                 gnosiaCount: next.gnosiaCount ? parseInt(next.gnosiaCount) : null,
                 lobbyMusicEnabled: next.lobbyMusicEnabled,
                 endGameMusicEnabled: next.endGameMusicEnabled,
@@ -496,6 +502,11 @@ export default function Lobby({
                                         value={settings.gnosiaCount}
                                         onChange={e => changeSetting("gnosiaCount", e.target.value)}
                                     />
+                                    {settings.hasIllusionist && (
+                                        <div style={{ fontSize: 8, color: "#9b30ff", marginTop: 8, lineHeight: 1.8 }}>
+                                            Illusionist adds +1 Gnosia after infecting a target at mission start.
+                                        </div>
+                                    )}
                                 </div>
                                 <SettingToggle label="ENGINEER ROLE"
                                     desc="Scans players at night for Gnosia"
@@ -538,13 +549,23 @@ export default function Lobby({
                                     </div>
                                 )}
                                 <SettingToggle label="TRAITOR ROLE"
-                                    desc="Appears human to all checks, wins with Gnosia"
+                                    desc="1/2 chance to appear and secretly support Gnosia"
                                     checked={settings.hasTraitor}
                                     onChange={v => changeSetting("hasTraitor", v)}
                                     onInfo={() => setExpandedRole(r => r === "traitor" ? null : "traitor")} />
                                 {expandedRole === "traitor" && (
                                     <div style={{ fontSize: 8, color: "#6a5080", lineHeight: 1.8, padding: "8px 0 12px", borderBottom: "1px solid #1a0a2a" }}>
                                         {ROLE_DESCRIPTIONS.traitor}
+                                    </div>
+                                )}
+                                <SettingToggle label="ILLUSIONIST ROLE"
+                                    desc="Transforms one Gnosia and adds +1 more at mission start"
+                                    checked={settings.hasIllusionist}
+                                    onChange={v => changeSetting("hasIllusionist", v)}
+                                    onInfo={() => setExpandedRole(r => r === "illusionist" ? null : "illusionist")} />
+                                {expandedRole === "illusionist" && (
+                                    <div style={{ fontSize: 8, color: "#6a5080", lineHeight: 1.8, padding: "8px 0 12px", borderBottom: "1px solid #1a0a2a" }}>
+                                        {ROLE_DESCRIPTIONS.illusionist}
                                     </div>
                                 )}
                             </div>
@@ -559,6 +580,7 @@ export default function Lobby({
                                     { key: "hasGuardian", label: "GUARDIAN ANGEL", role: "guardian" },
                                     { key: "hasLawyer", label: "LAWYER", role: "lawyer" },
                                     { key: "hasTraitor", label: "TRAITOR", role: "traitor" },
+                                    { key: "hasIllusionist", label: "ILLUSIONIST", role: "illusionist" },
                                     { key: "lobbyMusicEnabled", label: "LOBBY MUSIC", role: null },
                                     { key: "endGameMusicEnabled", label: "END GAME MUSIC", role: null },
                                 ].map(({ key, label, role }) => (
@@ -579,7 +601,9 @@ export default function Lobby({
                                                     }}>?</button>
                                                 )}
                                                 <span style={{ color: lobbyState?.settings[key] ? "#00f5ff" : "#2a1a3a" }}>
-                                                    {lobbyState?.settings[key] ? "ON" : "OFF"}
+                                                    {key === "hasTraitor"
+                                                        ? (lobbyState?.settings[key] ? "1/2 CHANCE" : "OFF")
+                                                        : (lobbyState?.settings[key] ? "ON" : "OFF")}
                                                 </span>
                                             </div>
                                         </div>

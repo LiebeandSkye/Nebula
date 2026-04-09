@@ -32,6 +32,9 @@ function createGameState(roomId, settings = {}) {
         meta: {
             phaseSeq: 0,
             nightResolvedSeq: null,
+            startPending: false,
+            pendingIllusionistChoice: false,
+            illusionistId: null,
         },
         players: [],
         settings: {
@@ -41,6 +44,7 @@ function createGameState(roomId, settings = {}) {
             hasGuardian: settings.hasGuardian || false,
             hasLawyer: settings.hasLawyer || false,
             hasTraitor: settings.hasTraitor || false,
+            hasIllusionist: settings.hasIllusionist || false,
             gnosiaCount: settings.gnosiaCount || null, // null = auto (floor(n/3))
             lobbyMusicEnabled: settings.lobbyMusicEnabled !== false,
             endGameMusicEnabled: settings.endGameMusicEnabled !== false,

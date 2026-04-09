@@ -134,6 +134,8 @@ const ROLE_INFO = {
     guardian: { icon: "🛡", desc: "Each night, protect one other player. If the Gnosia target them, the kill is blocked." },
     lawyer:   { icon: "⚖", desc: "Once per game, you may dismiss the vote during any voting round — cancelling it entirely so no one is eliminated." },
     traitor:  { icon: "◈", desc: "You have no special ability, but you appear human to all scans and inspections. You win with the Gnosia." },
+    illusionist: { icon: "🎭", desc: "Before the mission begins, infect one crew member to turn them into Gnosia. After that, you act exactly like Gnosia and appear as Gnosia to all checks." },
+    
 };
 
 function PhaseTimer({ endsAt, color }) {
@@ -1161,7 +1163,7 @@ export default function Game({
                             {/* Visual divider for the chat panel to prevent perceived overlap */}
                             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, #2a1a4a, transparent)", zIndex: 10 }} />
                             <ChatPanel 
-                            roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} 
+                            roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} players={players} myId={myId}
                             isPanelOpen={true}
                             pubMsgs={pubMsgs} gnMsgs={gnMsgs}
                             unreadPub={unreadPub} unreadGn={unreadGn}
@@ -1187,7 +1189,7 @@ export default function Game({
                             </div>
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                                 <ChatPanel 
-                                    roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} 
+                                    roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} players={players} myId={myId}
                                     isPanelOpen={true}
                                     pubMsgs={pubMsgs} gnMsgs={gnMsgs}
                                     unreadPub={unreadPub} unreadGn={unreadGn}
@@ -1205,7 +1207,7 @@ export default function Game({
                     {desktopChat && (
                         <div style={{ flex: 1 }}>
                             <ChatPanel 
-                                roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} 
+                                roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} players={players} myId={myId}
                                 isPanelOpen={true}
                                 pubMsgs={pubMsgs} gnMsgs={gnMsgs}
                                 unreadPub={unreadPub} unreadGn={unreadGn}

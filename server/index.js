@@ -13,7 +13,15 @@ const {
     markPlayerDisconnected, scheduleDisconnectRemoval, resumeSession, resetRoom,
     updateRoomActivity
 } = require("./rooms/roomManager");
-const { assignRoles, getGnosiaIds, buildRolePayload } = require("./game/roles");
+const {
+    assignRoles,
+    getGnosiaIds,
+    buildRolePayload,
+    isGnosiaRole,
+    countGnosiaPlayers,
+    appearsGnosiaToEngineer,
+    getDoctorRevealRole,
+} = require("./game/roles");
 const stateMachine = require("./game/stateMachine");
 const nightResolver = require("./game/nightResolver");
 
@@ -35,6 +43,8 @@ const AURA_ROLL_OPTIONS = [
     "aura-sparkle-rainbow",
     "aura-sparkle-red",
 ];
+const ILLUSIONIST_SELECTION_WINDOW_MS = 20000;
+const pendingIllusionistTimers = new Map();
 
 // ── CORS & Socket.io Configuration ───────────────────────────────────
 function normalizeOrigin(origin) {
@@ -117,17 +127,142 @@ app.get("/api/health", (_req, res) => {
 });
 
 // ── Message builder ───────────────────────────────────────────────────
-function buildMessage(sender, text, channel) {
+function buildMessage(sender, text, channel, targetPersona = null) {
     return {
         id: crypto.randomUUID(),
         channel,
         text,
-        senderId: sender.id,
-        senderName: sender.username,
-        profileId: sender.profileId,
-        isAlive: sender.alive,
+        senderId: targetPersona ? targetPersona.id : sender.id,
+        senderName: targetPersona ? targetPersona.username : sender.username,
+        profileId: targetPersona ? targetPersona.profileId : sender.profileId,
+        isAlive: targetPersona ? targetPersona.alive : sender.alive,
         timestamp: Date.now(),
     };
+}
+
+function clearPendingIllusionistTimer(roomId) {
+    const handle = pendingIllusionistTimers.get(roomId);
+    if (!handle) return;
+    clearTimeout(handle);
+    pendingIllusionistTimers.delete(roomId);
+}
+
+function buildIllusionistCandidates(gameState, illusionistId) {
+    return gameState.players
+        .filter((player) => player.id !== illusionistId && !isGnosiaRole(player.role))
+        .map((player) => ({
+            id: player.id,
+            username: player.username,
+            profileId: player.profileId,
+            profileName: player.profileName || null,
+        }));
+}
+
+function finalizeLobbyGameStart(gameState) {
+    clearPendingIllusionistTimer(gameState.roomId);
+    const meta = gameState.meta || (gameState.meta = {});
+    meta.startPending = false;
+    meta.pendingIllusionistChoice = false;
+    meta.illusionistId = gameState.players.find((player) => player.role === "illusionist")?.id || null;
+
+    const gnosiaChannel = `${gameState.roomId}:gnosia`;
+    for (const gid of getGnosiaIds(gameState)) {
+        const playerSocket = io.sockets.sockets.get(gid);
+        if (playerSocket) playerSocket.join(gnosiaChannel);
+    }
+
+    io.to(gameState.roomId).emit("pregame:illusionistResolved");
+
+    for (const player of gameState.players) {
+        io.to(player.id).emit("game:roleAssigned", buildRolePayload(player, gameState));
+    }
+
+    io.to(gameState.roomId).emit("game:starting", {
+        playerCount: gameState.players.length,
+        gnosiaCount: countGnosiaPlayers(gameState),
+    });
+
+    stateMachine.stopRoomMusic(gameState, stateMachine.MUSIC_TRANSITION_MS);
+    stateMachine.scheduleGameStart(gameState, 5000);
+}
+
+function resolveIllusionistInfection(gameState, requestedTargetId = null) {
+    if (!gameState) return { success: false, error: "Room not found." };
+
+    const meta = gameState.meta || (gameState.meta = {});
+    if (!meta.pendingIllusionistChoice) {
+        return { success: false, error: "Illusionist choice is no longer pending." };
+    }
+
+    const illusionistId = meta.illusionistId;
+    const candidates = buildIllusionistCandidates(gameState, illusionistId);
+    if (candidates.length === 0) {
+        finalizeLobbyGameStart(gameState);
+        return { success: true, infectedId: null, infectedUsername: null };
+    }
+
+    let target =
+        requestedTargetId && requestedTargetId !== "random"
+            ? gameState.players.find(
+                (player) =>
+                    player.id === requestedTargetId &&
+                    player.id !== illusionistId &&
+                    !isGnosiaRole(player.role)
+            )
+            : null;
+
+    if (!target) {
+        const picked = candidates[Math.floor(Math.random() * candidates.length)];
+        target = gameState.players.find((player) => player.id === picked.id) || null;
+    }
+
+    if (!target) {
+        finalizeLobbyGameStart(gameState);
+        return { success: true, infectedId: null, infectedUsername: null };
+    }
+
+    target.role = "gnosia";
+    console.log(`[Roles] ${gameState.roomId}: Illusionist infected ${target.username}`);
+
+    finalizeLobbyGameStart(gameState);
+    return { success: true, infectedId: target.id, infectedUsername: target.username };
+}
+
+function startIllusionistPregame(gameState) {
+    const illusionist = gameState.players.find((player) => player.role === "illusionist");
+    if (!illusionist) {
+        finalizeLobbyGameStart(gameState);
+        return;
+    }
+
+    const meta = gameState.meta || (gameState.meta = {});
+    meta.pendingIllusionistChoice = true;
+    meta.illusionistId = illusionist.id;
+
+    const candidates = buildIllusionistCandidates(gameState, illusionist.id);
+    if (candidates.length === 0) {
+        finalizeLobbyGameStart(gameState);
+        return;
+    }
+
+    io.to(gameState.roomId).emit("pregame:illusionistManifesting", {
+        roomId: gameState.roomId,
+        durationMs: ILLUSIONIST_SELECTION_WINDOW_MS,
+    });
+
+    io.to(illusionist.id).emit("pregame:illusionistPrompt", {
+        roomId: gameState.roomId,
+        durationMs: ILLUSIONIST_SELECTION_WINDOW_MS,
+        candidates,
+    });
+
+    clearPendingIllusionistTimer(gameState.roomId);
+    const handle = setTimeout(() => {
+        pendingIllusionistTimers.delete(gameState.roomId);
+        if (gameState.phase !== "LOBBY") return;
+        resolveIllusionistInfection(gameState, null);
+    }, ILLUSIONIST_SELECTION_WINDOW_MS);
+    pendingIllusionistTimers.set(gameState.roomId, handle);
 }
 
 // ── Socket.io ─────────────────────────────────────────────────────────
@@ -259,6 +394,7 @@ io.on("connection", (socket) => {
         }
 
         if (result.destroyed) {
+            clearPendingIllusionistTimer(roomId);
             nightResolver.cleanupRoom(roomId);
             stateMachine.cleanupRoom(roomId);
             console.log(`[Room] Room ${roomId} destroyed (no players left)`);
@@ -284,7 +420,7 @@ io.on("connection", (socket) => {
         updateRoomActivity(rid);
         socket.join(rid);
         socket.join(`${rid}:lobby`);
-        if (player.role === "gnosia") {
+        if (isGnosiaRole(player.role)) {
             socket.join(`${rid}:gnosia`);
         }
 
@@ -300,6 +436,16 @@ io.on("connection", (socket) => {
         const inGame = gs.phase !== "LOBBY" && gs.phase !== "END";
         const rolePayload = player.role ? buildRolePayload(player, gs) : null;
         const phasePayload = inGame ? stateMachine.buildPhasePayload(gs) : null;
+        const pregameState = gs.meta?.pendingIllusionistChoice
+            ? {
+                mode: gs.meta?.illusionistId === socket.id ? "prompt" : "manifesting",
+                roomId: rid,
+                durationMs: ILLUSIONIST_SELECTION_WINDOW_MS,
+                candidates: gs.meta?.illusionistId === socket.id
+                    ? buildIllusionistCandidates(gs, socket.id)
+                    : [],
+            }
+            : null;
 
         reply(cb, {
             success: true,
@@ -308,6 +454,7 @@ io.on("connection", (socket) => {
             inGame,
             phasePayload,
             rolePayload,
+            pregameState,
             myId: socket.id,
         });
     });
@@ -317,6 +464,7 @@ io.on("connection", (socket) => {
         const result = resetRoom(socket.id, roomId);
         if (!result.success) return reply(cb, { success: false, error: result.error });
         updateRoomActivity(roomId);
+        clearPendingIllusionistTimer(roomId);
         
         try {
             const gnosiaChannel = `${roomId}:gnosia`;
@@ -341,7 +489,7 @@ io.on("connection", (socket) => {
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
         updateRoomActivity(roomId);
         if (gs.phase !== "LOBBY") return reply(cb, { success: false, error: "Game already started." });
-        if (stateMachine.isGameStartScheduled(roomId)) {
+        if (stateMachine.isGameStartScheduled(roomId) || gs.meta?.startPending) {
             return reply(cb, { success: false, error: "Game is already starting." });
         }
 
@@ -352,26 +500,38 @@ io.on("connection", (socket) => {
         try { assignRoles(gs); }
         catch (err) { return reply(cb, { success: false, error: err.message }); }
 
-        const gnosiaChannel = `${roomId}:gnosia`;
-        for (const gid of getGnosiaIds(gs)) {
-            const s = io.sockets.sockets.get(gid);
-            if (s) s.join(gnosiaChannel);
-        }
-
-        for (const player of gs.players) {
-            io.to(player.id).emit("game:roleAssigned", buildRolePayload(player, gs));
-        }
-
+        const meta = gs.meta || (gs.meta = {});
+        meta.startPending = true;
         reply(cb, { success: true });
-        const gnosiaCount = gs.players.filter(p => p.role === "gnosia").length;
-        io.to(roomId).emit("game:starting", { playerCount: gs.players.length, gnosiaCount });
-        stateMachine.stopRoomMusic(gs, stateMachine.MUSIC_TRANSITION_MS);
 
-        stateMachine.scheduleGameStart(gs, 5000);
+        if (gs.players.some((player) => player.role === "illusionist")) {
+            startIllusionistPregame(gs);
+            return;
+        }
+
+        finalizeLobbyGameStart(gs);
+    });
+
+    bindAckHandler("pregame:illusionistInfect", ({ roomId, targetId }, cb) => {
+        const gs = getRoom(roomId);
+        if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
+
+        const actor = gs.players.find((player) => player.id === socket.id);
+        if (!actor || actor.role !== "illusionist") {
+            return reply(cb, { success: false, error: "Not authorized." });
+        }
+
+        if (!gs.meta?.pendingIllusionistChoice || gs.meta?.illusionistId !== socket.id) {
+            return reply(cb, { success: false, error: "The manifestation is already resolved." });
+        }
+
+        const result = resolveIllusionistInfection(gs, targetId || null);
+        reply(cb, result);
     });
 
     // ── CHAT ──────────────────────────────────────────────────────────
-    bindAckHandler("chat:message", ({ roomId, channel, text }, cb) => {
+    bindAckHandler("chat:message", ({ roomId, channel, text, targetId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
         updateRoomActivity(roomId);
@@ -385,10 +545,15 @@ io.on("connection", (socket) => {
 
         const { phase } = gs;
 
+        let targetPersona = null;
+        if (targetId && sender.role === "illusionist" && channel === "public") {
+            targetPersona = gs.players.find(p => p.id === targetId);
+        }
+
         if (channel === "public") {
             // Dead players can chat at any time, but only dead players can see their messages
             if (!sender.alive) {
-                const msg = buildMessage(sender, trimmed, "public");
+                const msg = buildMessage(sender, trimmed, "public", targetPersona);
                 const deadPlayers = gs.players.filter(p => !p.alive).map(p => p.id);
                 deadPlayers.forEach(deadId => {
                     io.to(deadId).emit("chat:message", msg);
@@ -400,14 +565,14 @@ io.on("connection", (socket) => {
             if (phase === "NIGHT") return reply(cb, { success: false, error: "Public chat closed at night." });
             if (phase === "VOTING") return reply(cb, { success: false, error: "Public chat closed during voting." });
             
-            const msg = buildMessage(sender, trimmed, "public");
+            const msg = buildMessage(sender, trimmed, "public", targetPersona);
             // Alive player message - send to everyone (alive AND dead can spectate)
             io.to(roomId).emit("chat:message", msg);
             return reply(cb, { success: true });
         }
 
         if (channel === "gnosia") {
-            if (sender.role !== "gnosia") return reply(cb, { success: false, error: "Channel not available." });
+            if (!isGnosiaRole(sender.role)) return reply(cb, { success: false, error: "Channel not available." });
             if (phase !== "DAY_DISCUSSION" && phase !== "NIGHT")
                 return reply(cb, { success: false, error: "Gnosia channel not active." });
             const msg = buildMessage(sender, trimmed, "gnosia");
@@ -521,15 +686,15 @@ io.on("connection", (socket) => {
 
         switch (actionType) {
             case "gnosia_vote": {
-                if (actor.role !== "gnosia") return reply(cb, { success: false, error: "Not authorized." });
+                if (!isGnosiaRole(actor.role)) return reply(cb, { success: false, error: "Not authorized." });
                 if (nightActions.gnosiaVotes[socket.id]) return reply(cb, { success: false, error: "Action already submitted." });
                 if (targetId !== "skip") {
                     const target = players.find(p => p.id === targetId && p.alive && p.id !== socket.id);
                     if (!target) return reply(cb, { success: false, error: "Invalid target." });
-                    if (target.role === "gnosia") return reply(cb, { success: false, error: "Cannot vote for an ally." });
+                    if (isGnosiaRole(target.role)) return reply(cb, { success: false, error: "Cannot vote for an ally." });
                 }
                 nightActions.gnosiaVotes[socket.id] = targetId;
-                const gCount = players.filter(p => p.alive && p.role === "gnosia").length;
+                const gCount = players.filter((player) => player.alive && isGnosiaRole(player.role)).length;
                 const vIn = Object.keys(nightActions.gnosiaVotes).length;
                 io.to(`${roomId}:gnosia`).emit("night:gnosiaVoteProgress", { votesIn: vIn, totalGnosia: gCount });
                 reply(cb, { success: true });
@@ -544,7 +709,7 @@ io.on("connection", (socket) => {
                 reply(cb, { success: true });
 
                 // Immediately deliver private scan result (no need to wait for night end)
-                const isGnosia = target.role === "gnosia";
+                const isGnosia = appearsGnosiaToEngineer(target);
                 io.to(actor.id).emit("night:scanResult", {
                     targetId,
                     isGnosia,
@@ -570,7 +735,7 @@ io.on("connection", (socket) => {
                 // Immediately deliver private inspection result
                 io.to(actor.id).emit("night:inspectResult", {
                     targetId,
-                    role: target.role,
+                    role: getDoctorRevealRole(target),
                     targetUsername: target.username,
                     error: null,
                 });

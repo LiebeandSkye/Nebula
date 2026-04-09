@@ -15,6 +15,7 @@
  */
 
 const { resetNightFlags } = require("./gameState");
+const { countGnosiaPlayers, isGnosiaRole } = require("./roles");
 const MUSIC_TRANSITION_MS = 1500;
 
 // ── Phase durations (ms) ────────────────────────────────────────────
@@ -45,13 +46,28 @@ function init(io) {
 
 function ensureMeta(gameState) {
     if (!gameState.meta || typeof gameState.meta !== "object") {
-        gameState.meta = { phaseSeq: 0, nightResolvedSeq: null };
+        gameState.meta = {
+            phaseSeq: 0,
+            nightResolvedSeq: null,
+            startPending: false,
+            pendingIllusionistChoice: false,
+            illusionistId: null,
+        };
     }
     if (typeof gameState.meta.phaseSeq !== "number") {
         gameState.meta.phaseSeq = 0;
     }
     if (!Object.prototype.hasOwnProperty.call(gameState.meta, "nightResolvedSeq")) {
         gameState.meta.nightResolvedSeq = null;
+    }
+    if (typeof gameState.meta.startPending !== "boolean") {
+        gameState.meta.startPending = false;
+    }
+    if (typeof gameState.meta.pendingIllusionistChoice !== "boolean") {
+        gameState.meta.pendingIllusionistChoice = false;
+    }
+    if (!Object.prototype.hasOwnProperty.call(gameState.meta, "illusionistId")) {
+        gameState.meta.illusionistId = null;
     }
     return gameState.meta;
 }
@@ -340,8 +356,8 @@ function advanceToMorning(gameState) {
 function checkWin(gameState) {
     const meta = ensureMeta(gameState);
     const alivePlayers = gameState.players.filter((p) => p.alive);
-    const aliveGnosia = alivePlayers.filter((p) => p.role === "gnosia");
-    const aliveHumans = alivePlayers.filter((p) => p.role !== "gnosia");
+    const aliveGnosia = alivePlayers.filter((p) => isGnosiaRole(p.role));
+    const aliveHumans = alivePlayers.filter((p) => !isGnosiaRole(p.role));
 
     let winner = null;
 
@@ -410,6 +426,9 @@ function resetToLobby(gameState) {
     const meta = ensureMeta(gameState);
     meta.phaseSeq += 1;
     meta.nightResolvedSeq = null;
+    meta.startPending = false;
+    meta.pendingIllusionistChoice = false;
+    meta.illusionistId = null;
     gameState.phase = "LOBBY";
     gameState.round = 0;
     gameState.winner = null;
@@ -586,7 +605,7 @@ function broadcastToRoom(roomId, event, data) {
  * Clients use this to update their UI and start countdown timers.
  */
 function buildPhasePayload(gameState) {
-    const gnosiaCount = gameState.players.filter((p) => p.role === "gnosia").length;
+    const gnosiaCount = countGnosiaPlayers(gameState);
 
     // Emit rich voter objects (same shape as phase:skip:updated) so clients
     // can render skip avatars directly without a fragile players-array lookup.

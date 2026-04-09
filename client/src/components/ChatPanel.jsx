@@ -10,6 +10,7 @@ import { RiGlobalLine } from "react-icons/ri";
 
 const PUBLIC_OPEN_PHASES = ["LOBBY", "DAY_DISCUSSION", "AFTERNOON", "MORNING"];
 const GNOSIA_OPEN_PHASES = ["LOBBY", "DAY_DISCUSSION", "AFTERNOON", "NIGHT", "MORNING"];
+const isGnosiaRole = (role) => role === "gnosia" || role === "illusionist";
 
 function MsgBubble({ msg, isMe, socketId }) {
     if (msg.type === "system") {
@@ -103,18 +104,32 @@ export default function ChatPanel({
     pubMsgs = [], gnMsgs = [], 
     unreadPub = 0, unreadGn = 0,
     onViewTab, onExpand, 
-    tab = "public", onTabChange // Controlled tab state
+    tab = "public", onTabChange, // Controlled tab state
+    players = [], myId
 }) {
-    const isGnosia = myRole === "gnosia";
+    const isGnosia = isGnosiaRole(myRole);
     const [input, setInput] = useState("");
     const [error, setError] = useState("");
     const [sending, setSending] = useState(false);
+    const [impersonatingId, setImpersonatingId] = useState(null);
+    const [showImpersonateModal, setShowImpersonateModal] = useState(false);
+    const [impersonateSearch, setImpersonateSearch] = useState("");
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
 
     const pubOpen = PUBLIC_OPEN_PHASES.includes(phase);
     const gnOpen = isGnosia && GNOSIA_OPEN_PHASES.includes(phase);
     const canSend = tab === "public" ? (pubOpen || !isAlive) : (isAlive && gnOpen);
+    
+    // Safety: Reset impersonation if the target player dies
+    useEffect(() => {
+        if (!impersonatingId) return;
+        const target = players.find(p => p.id === impersonatingId);
+        if (!target || !target.alive) {
+            setImpersonatingId(null);
+            if (showImpersonateModal) setShowImpersonateModal(false);
+        }
+    }, [players, impersonatingId, showImpersonateModal]);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -130,7 +145,11 @@ export default function ChatPanel({
         const text = input.trim();
         if (!text || !canSend || sending) return;
         setSending(true); setError("");
-        socket.emit("chat:message", { roomId, channel: tab, text }, res => {
+        const payload = { roomId, channel: tab, text };
+        if (tab === "public" && myRole === "illusionist" && impersonatingId) {
+            payload.targetId = impersonatingId;
+        }
+        socket.emit("chat:message", payload, res => {
             setSending(false);
             if (!res.success) { setError(res.error); setTimeout(() => setError(""), 3000); }
             else { setInput(""); inputRef.current?.focus(); }
@@ -141,7 +160,7 @@ export default function ChatPanel({
     const tabColor = tab === "gnosia" ? "#9b30ff" : "#00f5ff";
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", minHeight: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", minHeight: 0, position: "relative" }}>
 
             {/* Tab bar */}
             <div style={{ display: "flex", borderBottom: "1px solid #1a0a2a", flexShrink: 0 }}>
@@ -271,6 +290,41 @@ export default function ChatPanel({
                 <div ref={bottomRef} />
             </div>
 
+            {/* Identity Switcher UI */}
+            {tab === "public" && myRole === "illusionist" && (
+                <div style={{
+                    flexShrink: 0, padding: "8px 12px", background: "#1a002a", 
+                    borderTop: "1px solid #330066", display: "flex", 
+                    alignItems: "center", justifyContent: "space-between"
+                }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{
+                            width: 24, height: 24, borderRadius: "50%", 
+                            overflow: "hidden", border: "1px solid #c46bff"
+                        }}>
+                            <img 
+                                src={`/profiles/${impersonatingId ? players.find(p => p.id === impersonatingId)?.profileId : players.find(p => p.id === myId)?.profileId}.jpg`} 
+                                alt="Persona"
+                                style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                                onError={(e) => e.target.style.display = "none"}
+                            />
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: 7, color: "#8f68b5" }}>SPEAKING AS</span>
+                            <span style={{ fontSize: 9, color: "#e0d4ff", fontFamily: "Press Start 2P" }}>
+                                {impersonatingId ? players.find(p => p.id === impersonatingId)?.username : "YOURSELF"}
+                            </span>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setShowImpersonateModal(true)}
+                        className="btn" 
+                        style={{ padding: "4px 8px", fontSize: 8, borderColor: "#c46bff", color: "#c46bff" }}>
+                        SWITCH
+                    </button>
+                </div>
+            )}
+
             {/* Input */}
             <div style={{
                 flexShrink: 0, borderTop: "1px solid #1a0a2a", padding: 12,
@@ -302,6 +356,62 @@ export default function ChatPanel({
                     </div>
                 )}
             </div>
+            {/* Impersonate Modal */}
+            {showImpersonateModal && (
+                <div style={{
+                    position: "absolute", bottom: 0, left: 0, right: 0, top: 0,
+                    background: "rgba(10, 0, 20, 0.95)", zIndex: 10,
+                    display: "flex", flexDirection: "column",
+                    animation: "fadeInUp 0.2s ease"
+                }}>
+                    <div style={{ padding: 12, borderBottom: "1px solid #c46bff44", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 9, color: "#c46bff", fontFamily: "Press Start 2P" }}>SHAPESHIFT</span>
+                        <button onClick={() => setShowImpersonateModal(false)} style={{ background: "transparent", border: "none", color: "#ff2a2a", cursor: "pointer", fontSize: 12 }}>✕</button>
+                    </div>
+                    <div style={{ padding: 12 }}>
+                        <input 
+                            placeholder="Search crew..." 
+                            value={impersonateSearch}
+                            onChange={e => setImpersonateSearch(e.target.value)}
+                            style={{ 
+                                width: "100%", background: "#000", border: "1px solid #c46bff44", 
+                                color: "#fff", padding: "8px", fontSize: 10, outline: "none",
+                                fontFamily: "sans-serif"
+                            }} 
+                        />
+                    </div>
+                    <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                        <button 
+                            onClick={() => { setImpersonatingId(null); setShowImpersonateModal(false); }}
+                            style={{ 
+                                padding: 12, background: !impersonatingId ? "#c46bff22" : "#1a0f2e", 
+                                border: `1px solid ${!impersonatingId ? "#c46bff" : "#1a0f2e"}`,
+                                color: "#e0d4ff", cursor: "pointer", textAlign: "left", fontSize: 10,
+                                display: "flex", alignItems: "center", gap: 10
+                            }}>
+                            <div style={{ width: 24, height: 24, borderRadius: "50%", overflow: "hidden", border: "1px solid #c46bff" }}>
+                                <img src={`/profiles/${players.find(p => p.id === myId)?.profileId}.jpg`} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => e.target.style.display="none"} />
+                            </div>
+                            <span>Return to True Form (Yourself)</span>
+                        </button>
+                        {players.filter(p => p.alive && p.id !== myId && p.username.toLowerCase().includes(impersonateSearch.toLowerCase())).map(p => (
+                            <button 
+                                key={p.id}
+                                onClick={() => { setImpersonatingId(p.id); setShowImpersonateModal(false); }}
+                                style={{ 
+                                    padding: 12, background: impersonatingId === p.id ? "#c46bff22" : "#1a0f2e", 
+                                    border: `1px solid ${impersonatingId === p.id ? "#c46bff" : "#1a0f2e"}`,
+                                    color: "#e0d4ff", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 10
+                                }}>
+                                <div style={{ width: 24, height: 24, borderRadius: "50%", overflow: "hidden" }}>
+                                    <img src={`/profiles/${p.profileId}.jpg`} alt={p.username} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => e.target.style.display="none"} />
+                                </div>
+                                <span style={{ fontSize: 10 }}>{p.username}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
