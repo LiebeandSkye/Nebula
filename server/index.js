@@ -10,7 +10,8 @@ const crypto = require("crypto");
 
 const {
     createRoom, joinRoom, removePlayer, updateSettings, getRoom, sanitizeStateForLobby,
-    markPlayerDisconnected, scheduleDisconnectRemoval, resumeSession, resetRoom
+    markPlayerDisconnected, scheduleDisconnectRemoval, resumeSession, resetRoom,
+    updateRoomActivity
 } = require("./rooms/roomManager");
 const { assignRoles, getGnosiaIds, buildRolePayload } = require("./game/roles");
 const stateMachine = require("./game/stateMachine");
@@ -36,27 +37,48 @@ const AURA_ROLL_OPTIONS = [
 ];
 
 // ── CORS & Socket.io Configuration ───────────────────────────────────
-const ALLOWED_ORIGINS = [
+function normalizeOrigin(origin) {
+    return String(origin || "").trim().replace(/\/$/, "");
+}
+
+function parseOriginList(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+        return raw.map(normalizeOrigin).filter(Boolean);
+    }
+    return String(raw)
+        .split(/[,\s]+/)
+        .map(normalizeOrigin)
+        .filter(Boolean);
+}
+
+const STATIC_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:3000",
     "https://nebula-eight-self.vercel.app",   // production — hardcoded safety net
-    process.env.CLIENT_URL,                   // also honour whatever Render has set
-].filter(Boolean);
+];
+
+const ENV_ALLOWED_ORIGINS = [
+    ...parseOriginList(process.env.CLIENT_URL),
+    ...parseOriginList(process.env.CORS_ORIGINS),
+    ...parseOriginList(process.env.ALLOWED_ORIGINS),
+];
+
+const ALLOWED_ORIGINS = Array.from(
+    new Set([...STATIC_ALLOWED_ORIGINS, ...ENV_ALLOWED_ORIGINS].map(normalizeOrigin).filter(Boolean))
+);
 
 const checkOrigin = (origin, callback) => {
     // Allow server-to-server / Postman (no origin header)
     if (!origin) return callback(null, true);
     
-    // Check exact match or match with trailing slash (flexible matching)
-    const normalizedOrigin = origin.replace(/\/$/, "");
-    const isAllowed = ALLOWED_ORIGINS.some(allowed => 
-        normalizedOrigin === allowed.replace(/\/$/, "")
-    );
+    const normalizedOrigin = normalizeOrigin(origin);
+    const isAllowed = ALLOWED_ORIGINS.includes(normalizedOrigin);
 
     if (isAllowed) {
         callback(null, true);
     } else {
-        console.warn(`[CORS] Blocked origin: ${origin}. Allowed: ${ALLOWED_ORIGINS.join(", ")}`);
+        console.warn(`[CORS] Blocked origin: ${origin}. Allowed origins: ${ALLOWED_ORIGINS.join(", ") || "(none configured)"}`);
         callback(new Error(`Origin ${origin} not allowed by CORS`));
     }
 };
@@ -70,9 +92,10 @@ const corsOptions = {
 
 const io = new Server(httpServer, {
     cors: corsOptions,
-    // websocket-first helps bypass handshake instability on many cloud providers
-    transports: ["websocket", "polling"],
-    pingTimeout: 20000,
+    // Polling-first is more resilient during Render cold starts/handshakes.
+    transports: ["polling", "websocket"],
+    // Increased timeouts to be more "forgiving" for mobile/unstable connections.
+    pingTimeout: 60000, 
     pingInterval: 25000,
 });
 
@@ -81,9 +104,17 @@ nightResolver.init(io);
 
 app.use(cors(corsOptions));
 app.use(express.json());
+console.log(`[CORS] Allowed origins: ${ALLOWED_ORIGINS.join(", ") || "(none configured)"}`);
 
 // ── REST ──────────────────────────────────────────────────────────────
-app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/api/health", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({
+        status: "ok",
+        ts: Date.now(),
+        uptimeSec: Math.floor(process.uptime()),
+    });
+});
 
 // ── Message builder ───────────────────────────────────────────────────
 function buildMessage(sender, text, channel) {
@@ -144,6 +175,7 @@ io.on("connection", (socket) => {
     bindAckHandler("room:updateSettings", ({ roomId, settings }, cb) => {
         const result = updateSettings(socket.id, roomId, settings);
         if (!result.success) return reply(cb, { success: false, error: result.error });
+        updateRoomActivity(roomId);
         const gs = getRoom(roomId);
         if (gs) {
             if (gs.phase === "LOBBY") {
@@ -170,6 +202,7 @@ io.on("connection", (socket) => {
     bindAckHandler("music:play", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         const host = gs.players.find(p => p.id === socket.id);
         if (!host || !host.isHost) return reply(cb, { success: false, error: "Only host can control music." });
 
@@ -198,12 +231,14 @@ io.on("connection", (socket) => {
     bindAckHandler("room:getState", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         reply(cb, { success: true, state: sanitizeStateForLobby(gs) });
     });
 
     bindAckHandler("room:leave", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
 
         const player = gs.players.find(p => p.id === socket.id);
         if (!player) return reply(cb, { success: false, error: "Player not found in room." });
@@ -246,6 +281,7 @@ io.on("connection", (socket) => {
         const player = result.player;
         const oldId = result.oldSocketId;
 
+        updateRoomActivity(rid);
         socket.join(rid);
         socket.join(`${rid}:lobby`);
         if (player.role === "gnosia") {
@@ -280,6 +316,7 @@ io.on("connection", (socket) => {
     bindAckHandler("room:playAgain", ({ roomId }, cb) => {
         const result = resetRoom(socket.id, roomId);
         if (!result.success) return reply(cb, { success: false, error: result.error });
+        updateRoomActivity(roomId);
         
         try {
             const gnosiaChannel = `${roomId}:gnosia`;
@@ -302,6 +339,7 @@ io.on("connection", (socket) => {
     bindAckHandler("game:start", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         if (gs.phase !== "LOBBY") return reply(cb, { success: false, error: "Game already started." });
         if (stateMachine.isGameStartScheduled(roomId)) {
             return reply(cb, { success: false, error: "Game is already starting." });
@@ -336,6 +374,7 @@ io.on("connection", (socket) => {
     bindAckHandler("chat:message", ({ roomId, channel, text }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
 
         const sender = gs.players.find(p => p.id === socket.id);
         if (!sender) return reply(cb, { success: false, error: "You have been disconnected from the room." });
@@ -383,6 +422,7 @@ io.on("connection", (socket) => {
     bindAckHandler("phase:skip", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         const player = gs.players.find(p => p.id === socket.id && p.alive);
         if (!player) return reply(cb, { success: false, error: "Not allowed." });
 
@@ -416,6 +456,7 @@ io.on("connection", (socket) => {
     bindAckHandler("vote:submit", ({ roomId, targetId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         if (gs.phase !== "VOTING") return reply(cb, { success: false, error: "Not voting phase." });
 
         const voter = gs.players.find(p => p.id === socket.id && p.alive);
@@ -446,6 +487,7 @@ io.on("connection", (socket) => {
     bindAckHandler("vote:dismiss", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         if (gs.phase !== "VOTING") return reply(cb, { success: false, error: "Not voting phase." });
 
         const lawyer = gs.players.find(p => p.id === socket.id && p.alive);
@@ -469,6 +511,7 @@ io.on("connection", (socket) => {
     bindAckHandler("night:action", ({ roomId, actionType, targetId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         if (gs.phase !== "NIGHT") return reply(cb, { success: false, error: "Not night phase." });
 
         const actor = gs.players.find(p => p.id === socket.id && p.alive);
@@ -555,6 +598,7 @@ io.on("connection", (socket) => {
     bindAckHandler("player:rollAura", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         const player = gs.players.find(p => p.id === socket.id);
         if (!player) return reply(cb, { success: false, error: "Player not found." });
         if ((player.rollsRemaining || 0) <= 0) return reply(cb, { success: false, error: "No rolls remaining." });
@@ -570,6 +614,7 @@ io.on("connection", (socket) => {
     bindAckHandler("player:emote", ({ roomId, emote }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         const player = gs.players.find(p => p.id === socket.id);
         if (!player) return reply(cb, { success: false, error: "Player not found." });
         // Sanitize: only allow safe path-like src and short label
@@ -582,9 +627,9 @@ io.on("connection", (socket) => {
     });
 
     bindAckHandler("player:selectAura", ({ roomId, aura }, cb) => {
-        console.log(`[SELECT] Host ${socket.id} selecting aura ${aura} in room ${roomId}`);
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         const player = gs.players.find(p => p.id === socket.id);
         if (!player) return reply(cb, { success: false, error: "Player not found." });
         
@@ -592,17 +637,15 @@ io.on("connection", (socket) => {
         if (!AURA_ROLL_OPTIONS.includes(aura)) return reply(cb, { success: false, error: "Invalid aura." });
 
         player.aura = aura;
-        console.log(`[SELECT] Success: Host ${player.username} selected ${aura}`);
-
         io.to(roomId).emit("player:auraUpdated", { playerId: socket.id, aura, rollsRemaining: player.rollsRemaining });
         reply(cb, { success: true, aura });
     });
-
 
     // ── HOST DEBUG ────────────────────────────────────────────────────
     bindAckHandler("phase:forceAdvance", ({ roomId }, cb) => {
         const gs = getRoom(roomId);
         if (!gs) return reply(cb, { success: false, error: "Room not found." });
+        updateRoomActivity(roomId);
         reply(cb, stateMachine.forceAdvance(gs, socket.id));
     });
 

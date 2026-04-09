@@ -14,6 +14,31 @@ const MAX_PLAYERS = 12;
 const disconnectGraceTimers = new Map();
 const DISCONNECT_GRACE_MS = 45 * 1000;
 
+// ── ROOM CLEANUP ─────────────────────────────────────────────────────
+const STALE_ROOM_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+const CLEANUP_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [roomId, gs] of rooms.entries()) {
+        const inactiveTime = now - (gs.lastActivityAt || 0);
+        if (inactiveTime > STALE_ROOM_THRESHOLD_MS) {
+            console.log(`[Cleanup] Removing stale room ${roomId} (inactive for ${Math.floor(inactiveTime / 60000)}m)`);
+            rooms.delete(roomId);
+            stateMachine.cleanupRoom(roomId);
+            nightResolver.cleanupRoom(roomId);
+            cleaned++;
+        }
+    }
+    if (cleaned > 0) console.log(`[Cleanup] Purged ${cleaned} stale rooms.`);
+}, CLEANUP_INTERVAL_MS);
+
+function updateRoomActivity(roomId) {
+    const gs = rooms.get(roomId);
+    if (gs) gs.lastActivityAt = Date.now();
+}
+
 function createRoom(socketId, username, profileId, settings = {}, sessionToken = null) {
     if (!isValidProfileId(profileId)) return { success: false, error: "Invalid profile." };
     const err = validateUsername(username);
@@ -24,6 +49,7 @@ function createRoom(socketId, username, profileId, settings = {}, sessionToken =
     const host = createPlayer(socketId, username, profileId, true, sessionToken);
     host.profileName = getProfileById(profileId)?.name || null;
     gameState.players.push(host);
+    gameState.lastActivityAt = Date.now();
     rooms.set(roomId, gameState);
 
     return { success: true, roomId, state: sanitizeStateForLobby(gameState) };
@@ -32,6 +58,7 @@ function createRoom(socketId, username, profileId, settings = {}, sessionToken =
 function joinRoom(socketId, roomId, username, profileId, password = null, sessionToken = null) {
     const gs = rooms.get(roomId);
     if (!gs) return { success: false, error: "Room not found." };
+    updateRoomActivity(roomId);
     if (gs.phase !== "LOBBY") return { success: false, error: "Game already started." };
     if (gs.players.length >= MAX_PLAYERS) return { success: false, error: "Room is full." };
     if (gs.settings.password && password !== gs.settings.password)
@@ -365,4 +392,5 @@ module.exports = {
     getRoom, findRoomBySocket, sanitizeStateForLobby, resetRoom,
     markPlayerDisconnected, scheduleDisconnectRemoval,
     resumeSession, cancelDisconnectGrace, migrateSocketId,
+    updateRoomActivity,
 };
