@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect } from "react";
 import { AVATAR_COLORS } from "../lib/profiles.js";
 
+const isGnosiaRole = (role) => role === "gnosia" || role === "illusionist";
+
 const buildAuraColumns = (specs, delayStep) =>
     specs.map(([left, bottom, width, height, rotate, thrust, layer], index) => ({
         left,
@@ -232,7 +234,7 @@ export default function PlayerCard({
         .map(([voterId]) => allPlayers.find(p => p.id === voterId))
         .filter(Boolean);
 
-    const isGnosiaTarget = phase === "NIGHT" && myRole === "gnosia" && isSelected;
+    const isGnosiaTarget = phase === "NIGHT" && isGnosiaRole(myRole) && isSelected;
     let borderColor = isDead ? "#1a0a2a" : isGnosiaTarget ? "#9b30ff" : isSelected ? "#00f5ff" : isAlly ? "#9b30ff" : `${color}44`;
     let bgColor = isDead ? "#07000f" : isGnosiaTarget ? "#9b30ff0d" : isSelected ? "#00f5ff0d" : isAlly ? "#13002533" : "#0d0020";
     let shadow = isGnosiaTarget ? "0 0 24px #9b30ff66, 0 0 48px #9b30ff22"

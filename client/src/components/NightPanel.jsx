@@ -3,10 +3,17 @@
  */
 import { AVATAR_COLORS } from "../lib/profiles.js";
 
+const isGnosiaRole = (role) => role === "gnosia" || role === "illusionist";
+
 const ROLE_META = {
     gnosia: {
         icon: "👁", color: "#9b30ff", heading: "COORDINATE THE KILL",
         instruction: "Vote for a kill target. Majority decides. Ties = no kill.",
+        actionLabel: "KILL", filterFn: (p, myId, allies = []) => p.alive && p.id !== myId && !allies.some(a => a.id === p.id)
+    },
+    illusionist: {
+        icon: "I", color: "#c46bff", heading: "COORDINATE THE KILL",
+        instruction: "Your infection is complete. Vote with the Gnosia to eliminate one human target.",
         actionLabel: "KILL", filterFn: (p, myId, allies = []) => p.alive && p.id !== myId && !allies.some(a => a.id === p.id)
     },
     engineer: {
@@ -88,7 +95,7 @@ function TargetStatusCard({ player, color, title, status, isLocked }) {
 
 function TargetRow({ player, isSelected, label, color, onSelect, myRole }) {
     const ac = AVATAR_COLORS[player.profileId] || "#c8b8ff";
-    const isGnosia = myRole === "gnosia";
+    const isGnosia = isGnosiaRole(myRole);
     const size = isGnosia ? 36 : 44;
     return (
         <button onClick={() => onSelect(player.id)} style={{
@@ -153,7 +160,7 @@ export default function NightPanel({
         <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
 
             {/* Gnosia-specific Micro-header / Others get full header */}
-            {myRole === "gnosia" ? (
+            {isGnosiaRole(myRole) ? (
                 <div style={{
                     padding: "14px 16px", flexShrink: 0,
                     borderBottom: "1px solid #1a0a2a",
@@ -257,7 +264,7 @@ export default function NightPanel({
             )}
 
             {/* Coordination / Submited Status for Gnosia/Special Roles */}
-            {myRole === "gnosia" && (selectedTarget || submitted) && (
+            {isGnosiaRole(myRole) && (selectedTarget || submitted) && (
                 <TargetStatusCard
                     player={players.find(p => p.id === selectedTarget)}
                     color={color}
@@ -282,7 +289,7 @@ export default function NightPanel({
                         height: "100%", display: "flex", alignItems: "center",
                         justifyContent: "center", flexDirection: "column", gap: 14
                     }}>
-                        {myRole !== "gnosia" && (
+                        {!isGnosiaRole(myRole) && (
                             <>
                                 <div style={{ fontSize: 36, color, filter: `drop-shadow(0 0 12px ${color})` }}>✓</div>
                                 <div style={{ fontSize: 10, color }}>ACTION SUBMITTED</div>
@@ -324,7 +331,7 @@ export default function NightPanel({
                         <div style={{ fontSize: 8, color: "#ff2a2a", marginBottom: 8 }}>⚠ {actionError}</div>
                     )}
                     <button
-                        className={`btn ${myRole === "gnosia" ? "btn-gnosia" : myRole === "doctor" ? "" : myRole === "guardian" ? "btn-gold" : ""}`}
+                        className={`btn ${isGnosiaRole(myRole) ? "btn-gnosia" : myRole === "doctor" ? "" : myRole === "guardian" ? "btn-gold" : ""}`}
                         style={{
                             width: "100%", fontSize: 10, borderColor: selectedTarget ? color : undefined,
                             color: selectedTarget ? color : undefined
@@ -333,7 +340,7 @@ export default function NightPanel({
                         {!selectedTarget ? "SELECT A TARGET"
                             : `${meta.actionLabel}: ${players.find(p => p.id === selectedTarget)?.username || "..."}`}
                     </button>
-                    {myRole === "gnosia" && (
+                    {isGnosiaRole(myRole) && (
                         <button
                             className="btn btn-secondary"
                             style={{ width: "100%", fontSize: 9 }}

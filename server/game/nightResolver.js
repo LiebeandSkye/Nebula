@@ -13,6 +13,7 @@
  */
 
 const { advanceToMorning } = require("./stateMachine");
+const { appearsGnosiaToEngineer, getDoctorRevealRole, isGnosiaRole } = require("./roles");
 
 let _io = null;
 const POST_NIGHT_REVEAL_MS = 6500;
@@ -221,7 +222,7 @@ function resolveEngineerScan(gameState) {
     const target = players.find((p) => p.id === targetId);
     if (!target) return { scanned: null, isGnosia: null };
 
-    const isGnosia = target.role === "gnosia";
+    const isGnosia = appearsGnosiaToEngineer(target);
     target.scanned = true;
 
     console.log(`[Night] Engineer scanned ${target.username} → ${isGnosia ? "GNOSIA" : "NOT GNOSIA"}`);
@@ -251,7 +252,7 @@ function resolveDoctorInspect(gameState) {
     console.log(`[Night] Doctor inspected ${target.username} → ${target.role}`);
 
     // Traitor disguises as human to the doctor
-    const revealedRole = target.role === "traitor" ? "human" : target.role;
+    const revealedRole = getDoctorRevealRole(target);
     return { inspected: targetId, role: revealedRole };
 }
 
@@ -344,7 +345,7 @@ function allNightActionsSubmitted(gameState) {
     const alive = players.filter((p) => p.alive);
 
     const hasRole = (role) => alive.some((p) => p.role === role);
-    const gnosiaAlive = alive.filter((p) => p.role === "gnosia");
+    const gnosiaAlive = alive.filter((p) => isGnosiaRole(p.role));
 
     // Gnosia — all alive Gnosia must have voted
     const gnosiaVoteCount = Object.keys(nightActions.gnosiaVotes).length;
