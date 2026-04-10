@@ -440,8 +440,10 @@ export default function Lobby({
                                                 <rect
                                                     className={`hold-ring-circle ${lobbyIsHolding ? 'active' : ''}`}
                                                     x="3" y="3" width="44" height="44" rx="4"
-                                                    strokeDasharray="176"
-                                                    strokeDashoffset="176"
+                                                    pathLength="100"
+                                                    strokeDasharray="100"
+                                                    strokeDashoffset="100"
+                                                    strokeLinejoin="round"
                                                 />
                                             </svg>
                                         )}

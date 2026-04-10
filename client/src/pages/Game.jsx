@@ -342,8 +342,10 @@ function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolu
                                             <rect
                                                 className={`hold-ring-circle ${goIsHolding ? 'active' : ''}`}
                                                 x="2" y="2" width="36" height="36" rx="4"
-                                                strokeDasharray="144"
-                                                strokeDashoffset="144"
+                                                pathLength="100"
+                                                strokeDasharray="100"
+                                                strokeDashoffset="100"
+                                                strokeLinejoin="round"
                                             />
                                         </svg>
                                     )}

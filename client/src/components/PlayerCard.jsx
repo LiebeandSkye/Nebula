@@ -717,8 +717,9 @@ export default function PlayerCard({
                                     cx={(avatarSize + 6) / 2}
                                     cy={(avatarSize + 6) / 2}
                                     r={(avatarSize + 6) / 2 - 2.5}
-                                    strokeDasharray={`${2 * Math.PI * ((avatarSize + 6) / 2 - 2.5)}`}
-                                    strokeDashoffset={`${2 * Math.PI * ((avatarSize + 6) / 2 - 2.5)}`}
+                                    pathLength="100"
+                                    strokeDasharray="100"
+                                    strokeDashoffset="100"
                                 />
                             </svg>
                         )}
