@@ -189,7 +189,7 @@ export default function Lobby({
         lobbyTimerRef.current = setTimeout(() => {
             setLobbyIsHolding(false);
             const rect = lobbyAvatarRef.current?.getBoundingClientRect();
-            if (rect && roomId) setLobbyEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes() });
+            if (rect && roomId) setLobbyEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes(), borderRadius: "4px" });
         }, 2000);
     }
 
@@ -426,6 +426,8 @@ export default function Lobby({
                                         onPointerUp={p.id === myId ? lobbyCancelHold : undefined}
                                         onPointerLeave={p.id === myId ? lobbyCancelHold : undefined}
                                         onPointerCancel={p.id === myId ? lobbyCancelHold : undefined}
+                                        onContextMenu={e => e.preventDefault()}
+                                        className={p.id === myId ? "no-callout" : ""}
                                         style={{ 
                                             position: "relative",
                                             cursor: p.id === myId ? (lobbyIsHolding ? "grabbing" : "grab") : "default", 
@@ -435,11 +437,11 @@ export default function Lobby({
                                         <Avatar profileId={p.profileId} username={p.username} size={44} />
                                         {p.id === myId && (
                                             <svg className="hold-ring-svg" style={{ width: 50, height: 50, left: -3, top: -3 }} viewBox="0 0 50 50">
-                                                <circle
+                                                <rect
                                                     className={`hold-ring-circle ${lobbyIsHolding ? 'active' : ''}`}
-                                                    cx="25" cy="25" r="22"
-                                                    strokeDasharray={`${2 * Math.PI * 22}`}
-                                                    strokeDashoffset={`${2 * Math.PI * 22}`}
+                                                    x="3" y="3" width="44" height="44" rx="4"
+                                                    strokeDasharray="176"
+                                                    strokeDashoffset="176"
                                                 />
                                             </svg>
                                         )}
@@ -854,7 +856,7 @@ export default function Lobby({
                 <EmoteWheel
                     cx={lobbyEmoteWheel.cx}
                     cy={lobbyEmoteWheel.cy}
-                    emotes={lobbyEmoteWheel.emotes}
+                    emotes={lobbyEmoteWheel.emotes} borderRadius={lobbyEmoteWheel.borderRadius}
                     onSelect={emote => { setLobbyEmoteWheel(null); emit("player:emote", { roomId, emote }); }}
                     onClose={() => setLobbyEmoteWheel(null)}
                 />

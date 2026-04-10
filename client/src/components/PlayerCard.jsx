@@ -629,12 +629,15 @@ export default function PlayerCard({
                             flexShrink: 0,
                             transition: "all 0.3s",
                             zIndex: 2,
-                        }}>
+                        }}
+                        className="no-callout"
+                        onContextMenu={e => e.preventDefault()}
+                        >
                             {showPortrait ? (
                                 <>
                                     <img
                                         src={`/profiles/${player.profileId}.jpg`}
-                                        alt={player.username}
+                                        alt={player.username} draggable="false"
                                         style={{
                                             width: "100%",
                                             height: "100%",
@@ -671,7 +674,10 @@ export default function PlayerCard({
                                     color: "#2a1a3a",
                                     position: "relative",
                                     zIndex: 2,
-                                }}>X</div>
+                                }}
+                                className="no-callout"
+                                onContextMenu={e => e.preventDefault()}
+                                >X</div>
                             )}
 
                             {isDead && showPortrait && (

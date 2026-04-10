@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSocket, useSocketEvent } from "./hooks/useSocket";
 import { useRoomMusic } from "./hooks/useRoomMusic";
+import { IoIosInfinite } from "react-icons/io";
 import Lobby from "./pages/Lobby.jsx";
 import Game from "./pages/Game.jsx";
 import { clearPlaySession, loadPlaySession } from "./lib/sessionPersistence.js";
@@ -16,7 +17,7 @@ const ROLE_COLORS = {
 };
 const ROLE_ICONS = { gnosia: "👁", engineer: "⚡", doctor: "☤", guardian: "🛡", human: "◈", lawyer: "⚖", traitor: "◈" };
 
-ROLE_ICONS.illusionist = "I";
+ROLE_ICONS.illusionist = <IoIosInfinite />;
 
 const SERVER_BASE_URL = (import.meta.env.VITE_SERVER_URL || "").replace(/\/$/, "");
 const HEALTH_URL = SERVER_BASE_URL ? `${SERVER_BASE_URL}/api/health` : "/api/health";
@@ -154,23 +155,25 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
             padding: 24,
         }}>
             <div style={{
-                width: "min(820px, 96vw)",
-                border: "1px solid rgba(155,48,255,0.75)",
-                boxShadow: "0 0 0 1px rgba(155,48,255,0.18), 0 0 36px rgba(155,48,255,0.28)",
-                background: "linear-gradient(180deg, rgba(30,0,48,0.96), rgba(11,0,24,0.96))",
-                padding: 28,
+                width: "min(540px, 90vw)",
+                border: "1px solid rgba(155,48,255,0.6)",
+                boxShadow: "0 0 40px rgba(155,48,255,0.2)",
+                background: "linear-gradient(180deg, rgba(20,0,36,0.98), rgba(11,0,24,0.98))",
+                padding: 24,
+                position: "relative",
+                overflow: "hidden"
             }}>
-                <div style={{ textAlign: "center", marginBottom: 20 }}>
-                    <div style={{ fontSize: 10, color: "#8f68b5", letterSpacing: "0.22em", marginBottom: 10 }}>
+                <div style={{ textAlign: "center", marginBottom: 18 }}>
+                    <div style={{ fontSize: 8, color: "#8f68b5", letterSpacing: "0.22em", marginBottom: 8 }}>
                         ILLUSIONIST SEQUENCE
                     </div>
-                    <div style={{ fontSize: 24, color: "#dca1ff", textShadow: "0 0 18px rgba(155,48,255,0.85)" }}>
-                        {isPrompt ? "Choose Someone To Infect" : "Illusionist Is Manifesting..."}
+                    <div style={{ fontSize: 18, color: "#dca1ff", textShadow: "0 0 12px rgba(155,48,255,0.7)", fontFamily: "Press Start 2P" }}>
+                        {isPrompt ? "SELECT TARGET" : "MANIFESTING..."}
                     </div>
-                    <div style={{ fontSize: 9, color: "#bda0d8", lineHeight: 1.9, marginTop: 12 }}>
+                    <div style={{ fontSize: 8, color: "#bda0d888", lineHeight: 1.6, marginTop: 10 }}>
                         {isPrompt
-                            ? "Select one crew member to become Gnosia before the mission begins."
-                            : "Purple neon floods the ship while the Illusionist bends reality."}
+                            ? "Choose a crew member to infect."
+                            : "Redefining reality. Please wait."}
                     </div>
                 </div>
 
@@ -178,9 +181,9 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                     <>
                         <div style={{
                             display: "grid",
-                            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                            gap: 12,
-                            marginBottom: 18,
+                            gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                            gap: 10,
+                            marginBottom: 16,
                         }}>
                             {(state.candidates || []).map((candidate) => (
                                 <button
@@ -188,20 +191,22 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                                     onClick={() => setSelectedId(candidate.id)}
                                     disabled={submitting}
                                     style={{
-                                        border: `1px solid ${selectedId === candidate.id ? "#dca1ff" : "rgba(155,48,255,0.26)"}`,
-                                        background: selectedId === candidate.id ? "rgba(155,48,255,0.16)" : "rgba(15,0,26,0.72)",
+                                        border: `1px solid ${selectedId === candidate.id ? "#9b30ff" : "rgba(155,48,255,0.15)"}`,
+                                        background: selectedId === candidate.id ? "rgba(155,48,255,0.12)" : "rgba(15,0,26,0.5)",
                                         color: selectedId === candidate.id ? "#f6ddff" : "#d8c1f0",
-                                        boxShadow: selectedId === candidate.id ? "0 0 22px rgba(155,48,255,0.2)" : "none",
-                                        padding: 14,
+                                        padding: 12,
                                         cursor: submitting ? "not-allowed" : "pointer",
                                         textAlign: "center",
                                         fontFamily: "Press Start 2P",
+                                        position: "relative",
+                                        transition: "all 0.2s"
                                     }}>
                                     <div style={{
-                                        width: 62,
-                                        height: 62,
-                                        margin: "0 auto 10px",
-                                        border: "2px solid rgba(155,48,255,0.36)",
+                                        width: 48,
+                                        height: 48,
+                                        margin: "0 auto 8px",
+                                        border: "1px solid rgba(155,48,255,0.3)",
+                                        borderRadius: "50%",
                                         overflow: "hidden",
                                     }}>
                                         <img
@@ -210,9 +215,8 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                         />
                                     </div>
-                                    <div style={{ fontSize: 9, lineHeight: 1.6 }}>{candidate.username}</div>
-                                    <div style={{ fontSize: 7, color: "#8f68b5", marginTop: 6 }}>
-                                        {candidate.profileName || ""}
+                                    <div style={{ fontSize: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                        {candidate.username}
                                     </div>
                                 </button>
                             ))}
@@ -232,40 +236,49 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                             </div>
                         )}
 
-                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: 10 }}>
                             <button
                                 className="btn btn-gnosia"
-                                style={{ flex: "1 1 240px" }}
+                                style={{ flex: 1, fontSize: 8, height: 40 }}
                                 disabled={!selectedId || submitting}
                                 onClick={() => submitChoice(selectedId)}>
-                                {submitting ? "LOCKING IN..." : "INFECT SELECTED PLAYER"}
+                                {submitting ? "INFECTING..." : "INFECT TARGET"}
                             </button>
                             <button
                                 className="btn"
                                 style={{
-                                    flex: "1 1 240px",
-                                    borderColor: "#dca1ff55",
+                                    flex: 1,
+                                    fontSize: 8,
+                                    height: 40,
+                                    borderColor: "rgba(155,48,255,0.4)",
                                     color: "#dca1ff",
-                                    background: "rgba(155,48,255,0.08)",
+                                    background: "rgba(155,48,255,0.05)",
                                 }}
                                 disabled={submitting}
                                 onClick={() => submitChoice("random")}>
-                                RANDOM INFECTION
+                                RANDOM
                             </button>
                         </div>
                     </>
                 ) : (
                     <div style={{
-                        border: "1px solid rgba(155,48,255,0.26)",
-                        background: "rgba(21,0,38,0.58)",
-                        padding: 28,
+                        border: "1px solid rgba(155,48,255,0.15)",
+                        background: "rgba(21,0,38,0.4)",
+                        padding: 24,
                         textAlign: "center",
                     }}>
-                        <div style={{ fontSize: 48, color: "#dca1ff", marginBottom: 14, textShadow: "0 0 18px rgba(155,48,255,0.9)" }}>
-                            I
+                        <div style={{ 
+                            fontSize: 32, 
+                            color: "#9b30ff", 
+                            marginBottom: 12, 
+                            filter: "drop-shadow(0 0 8px #9b30ff)",
+                            display: "flex",
+                            justifyContent: "center"
+                        }}>
+                            <IoIosInfinite />
                         </div>
-                        <div style={{ fontSize: 10, color: "#f2d5ff", lineHeight: 2 }}>
-                            Please wait while the Illusionist chooses a victim.
+                        <div style={{ fontSize: 8, color: "#8a7aa0", letterSpacing: "0.05em" }}>
+                            Waiting for the Illusionist...
                         </div>
                     </div>
                 )}

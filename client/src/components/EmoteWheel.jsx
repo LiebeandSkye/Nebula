@@ -42,7 +42,7 @@ function getHoveredIndex(cx, cy, px, py) {
     return Math.floor(((normalized + 30) % 360) / 60);
 }
 
-export default function EmoteWheel({ cx, cy, emotes, onSelect, onClose }) {
+export default function EmoteWheel({ cx, cy, emotes, onSelect, onClose, borderRadius = "50%" }) {
     const [hoveredIndex, setHoveredIndex] = useState(-1);
 
     useEffect(() => {
@@ -98,7 +98,7 @@ export default function EmoteWheel({ cx, cy, emotes, onSelect, onClose }) {
                 position: "absolute",
                 left: cx - 68, top: cy - 68,
                 width: 136, height: 136,
-                borderRadius: "50%",
+                borderRadius: borderRadius,
                 background: "radial-gradient(circle, rgba(7,0,15,0.96) 50%, transparent 100%)",
                 border: "1px solid #2a1a4a",
                 boxShadow: "0 0 40px rgba(0,0,0,0.9), 0 0 16px rgba(155,48,255,0.15)",
@@ -175,7 +175,7 @@ export default function EmoteWheel({ cx, cy, emotes, onSelect, onClose }) {
                         style={{
                             width: 28, height: 28,
                             objectFit: "cover",
-                            borderRadius: "50%",
+                            borderRadius: borderRadius,
                             opacity: 0.9,
                         }}
                     />

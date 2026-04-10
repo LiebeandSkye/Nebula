@@ -11,6 +11,7 @@ import { clearPlaySession } from "../lib/sessionPersistence.js";
 import { AVATAR_COLORS } from "../lib/profiles.js";
 import { BsStars } from "react-icons/bs";
 import { CiSettings } from "react-icons/ci";
+import { IoIosInfinite } from "react-icons/io";
 
 const PHASE_COLORS = {
     DAY_DISCUSSION: "#00f5ff", VOTING: "#ffd700", AFTERNOON: "#ffb347",
@@ -135,7 +136,7 @@ const ROLE_INFO = {
     guardian: { icon: "🛡", desc: "Each night, protect one other player. If the Gnosia target them, the kill is blocked." },
     lawyer:   { icon: "⚖", desc: "Once per game, you may dismiss the vote during any voting round — cancelling it entirely so no one is eliminated." },
     traitor:  { icon: "◈", desc: "You have no special ability, but you appear human to all scans and inspections. You win with the Gnosia." },
-    illusionist: { icon: "🎭", desc: "Before the mission begins, infect one crew member to turn them into Gnosia. After that, you act exactly like Gnosia and appear as Gnosia to all checks." },
+    illusionist: { icon: <IoIosInfinite />, desc: "Before the mission begins, infect one crew member to turn them into Gnosia. After that, you act exactly like Gnosia and appear as Gnosia to all checks." },
     
 };
 const isGnosiaRole = (role) => role === "gnosia" || role === "illusionist";
@@ -236,7 +237,7 @@ function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolu
         holdTimerRef.current = setTimeout(() => {
             setGoIsHolding(false);
             const rect = avatarRefs.current[playerId]?.getBoundingClientRect();
-            if (rect) setGoEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes() });
+            if (rect) setGoEmoteWheel({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, emotes: getRandomEmotes(), borderRadius: "4px" });
         }, 2000);
     }
 
@@ -291,7 +292,7 @@ function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolu
             {goEmoteWheel && (
                 <EmoteWheel
                     cx={goEmoteWheel.cx} cy={goEmoteWheel.cy}
-                    emotes={goEmoteWheel.emotes}
+                    emotes={goEmoteWheel.emotes} borderRadius={goEmoteWheel.borderRadius}
                     onSelect={emote => { setGoEmoteWheel(null); onEmote?.(emote); }}
                     onClose={() => setGoEmoteWheel(null)}
                 />
@@ -327,19 +328,22 @@ function GameOverScreen({ result, onPlayAgain, amHost, musicVolume, setMusicVolu
                                     onPointerUp={isMe ? goCancelHold : undefined}
                                     onPointerLeave={isMe ? goCancelHold : undefined}
                                     onPointerCancel={isMe ? goCancelHold : undefined}
+                                    onContextMenu={e => e.preventDefault()}
+                                    className={isMe ? "no-callout" : ""}
                                     style={{ width: 40, height: 40, flexShrink: 0, border: `2px solid ${ac}55`, background: ac + "15", overflow: "hidden", position: "relative", cursor: isMe ? (goIsHolding ? "grabbing" : "grab") : "default", touchAction: isMe ? "none" : undefined }}>
                                     <img src={`/profiles/${p.profileId}.jpg`} alt={p.username} style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                        draggable="false"
                                         onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
                                     <div style={{ display: "none", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", color: ac, fontSize: 16, fontWeight: "bold" }}>
                                         {p.username[0].toUpperCase()}
                                     </div>
                                     {isMe && (
-                                        <svg className="hold-ring-svg" viewBox="0 0 40 40">
-                                            <circle
+                                        <svg className="hold-ring-svg" viewBox="0 0 40 40" style={{ position: "absolute", inset: 0 }}>
+                                            <rect
                                                 className={`hold-ring-circle ${goIsHolding ? 'active' : ''}`}
-                                                cx="20" cy="20" r="17"
-                                                strokeDasharray={`${2 * Math.PI * 17}`}
-                                                strokeDashoffset={`${2 * Math.PI * 17}`}
+                                                x="2" y="2" width="36" height="36" rx="4"
+                                                strokeDasharray="144"
+                                                strokeDashoffset="144"
                                             />
                                         </svg>
                                     )}
@@ -705,7 +709,7 @@ export default function Game({
     });
 
     function handleHoldComplete(cx, cy) {
-        setEmoteWheel({ cx, cy, emotes: getRandomEmotes() });
+        setEmoteWheel({ cx, cy, emotes: getRandomEmotes(), borderRadius: "50%" });
     }
 
     function handleEmoteSelect(emote) {
@@ -1009,7 +1013,7 @@ export default function Game({
                 <EmoteWheel
                     cx={emoteWheel.cx}
                     cy={emoteWheel.cy}
-                    emotes={emoteWheel.emotes}
+                    emotes={emoteWheel.emotes} borderRadius={emoteWheel.borderRadius}
                     onSelect={handleEmoteSelect}
                     onClose={() => setEmoteWheel(null)}
                 />
