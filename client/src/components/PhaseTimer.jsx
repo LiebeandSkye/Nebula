@@ -16,7 +16,7 @@ export default function PhaseTimer({ endsAt, color }) {
     const urgent = secs <= 30 && secs > 0;
 
     return (
-        <div style={{ textAlign: "center" }}>
+        <div className="cp-phase-timer" style={{ textAlign: "center" }}>
             <div style={{ fontSize: 7, color: "#8a7aa0", letterSpacing: "0.2em", marginBottom: 4 }}>TIME REMAINING</div>
             <div style={{
                 fontSize: 32, color: urgent ? "#ff2a2a" : color,

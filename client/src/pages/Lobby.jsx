@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSocket, useSocketEvent } from "../hooks/useSocket";
 import { clearPlaySession, getOrCreateSessionToken, savePlaySession } from "../lib/sessionPersistence.js";
 import { PROFILES, AVATAR_COLORS } from "../lib/profiles.js";
+import { getStoredTheme, applyTheme } from "../lib/themeStore.js";
 import EmoteWheel, { getRandomEmotes } from "../components/EmoteWheel.jsx";
 
 function Avatar({ profileId, username, size = 56, color }) {
@@ -37,10 +38,10 @@ function Avatar({ profileId, username, size = 56, color }) {
 
 const ROLE_DESCRIPTIONS = {
     engineer: "Each night, scan one player to learn if they are Gnosia. If they are, they receive a warning — not your identity.",
-    doctor:   "Each night, inspect one player in Cold Sleep to reveal their true role.",
+    doctor: "Each night, inspect one player in Cold Sleep to reveal their true role.",
     guardian: "Each night, protect one other player. If the Gnosia target them, the kill is blocked.",
-    lawyer:   "Once per game, you may dismiss the vote during any voting round — cancelling it entirely so no one is eliminated.",
-    traitor:  "You have no special ability, but you appear human to all scans and inspections. You win with the Gnosia.",
+    lawyer: "Once per game, you may dismiss the vote during any voting round — cancelling it entirely so no one is eliminated.",
+    traitor: "You have no special ability, but you appear human to all scans and inspections. You win with the Gnosia.",
 };
 
 ROLE_DESCRIPTIONS.traitor = "50% chance to appear. If chosen, you have no special ability, appear human to all scans and inspections, and win with the Gnosia.";
@@ -101,14 +102,15 @@ export default function Lobby({
     });
     const dragStateRef = useRef(null);
     const volumeDragStateRef = useRef(null);
+    const [currentTheme, setCurrentTheme] = useState(getStoredTheme);
 
     // Emote state for lobby
-    const [lobbyEmotes,    setLobbyEmotes]    = useState({});
+    const [lobbyEmotes, setLobbyEmotes] = useState({});
     const [lobbyEmoteWheel, setLobbyEmoteWheel] = useState(null);
     const [lobbyIsHolding, setLobbyIsHolding] = useState(false);
-    const lobbyTimerRef   = useRef(null);
-    const lobbyAvatarRef    = useRef(null);
-    const lobbyEmoteTimers  = useRef({});
+    const lobbyTimerRef = useRef(null);
+    const lobbyAvatarRef = useRef(null);
+    const lobbyEmoteTimers = useRef({});
 
     function syncSettingsFromState(state) {
         if (!state?.settings) return;
@@ -376,14 +378,14 @@ export default function Lobby({
                 alignItems: "center", justifyContent: "center", padding: 32, gap: 24,
             }}>
                 {/* Header */}
-                <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 11, color: "#4a3060", letterSpacing: "0.2em", marginBottom: 12 }}>
+                <div className='' style={{ textAlign: "center", flexDirection: "column", display: "flex", alignItems: "center", gap: 4 }}>
+                    <div className="cp-title-flicker cp-flicker-shake" style={{ fontSize: 11, color: "#4a3060", letterSpacing: "0.2em", marginBottom: 12 }}>
                         PROJECT NEBULA
                     </div>
-                    <div className="glow-cyan" style={{ fontSize: 28, letterSpacing: "0.1em" }}>
+                    <div className="glow-cyan cp-room-code cp-flicker-shake" style={{ fontSize: 28, letterSpacing: "0.1em" }}>
                         {roomId}
                     </div>
-                    <div style={{ fontSize: 9, color: "#4a3060", marginTop: 8 }}>
+                    <div className="cp-lobby-instruction" style={{ fontSize: 9, color: "#4a3060", marginTop: 8 }}>
                         Share this code with your crew
                     </div>
                 </div>
@@ -394,7 +396,7 @@ export default function Lobby({
                 }}>
 
                     {/* Player list */}
-                    <div className="panel-glow" style={{ flex: "1 1 340px", minWidth: 280 }}>
+                    <div className="panel-glow cp-bg-mood cp-bg-davidxlucy" style={{ flex: "1 1 340px", minWidth: 280 }}>
                         <div style={{
                             padding: "16px 20px", borderBottom: "1px solid #1a0a2a",
                             display: "flex", justifyContent: "space-between", alignItems: "center"
@@ -406,7 +408,7 @@ export default function Lobby({
                         </div>
                         <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
                             {lobbyState?.players.map(p => (
-                                <div key={p.id} className="anim-fadeInUp" style={{
+                                <div key={p.id} className={`anim-fadeInUp lobby-player-row ${p.id === myId ? "lobby-player-me" : ""}`} style={{
                                     position: "relative",
                                     display: "flex", alignItems: "center", gap: 14,
                                     padding: "10px 12px",
@@ -428,10 +430,10 @@ export default function Lobby({
                                         onPointerCancel={p.id === myId ? lobbyCancelHold : undefined}
                                         onContextMenu={e => e.preventDefault()}
                                         className={p.id === myId ? "no-callout" : ""}
-                                        style={{ 
+                                        style={{
                                             position: "relative",
-                                            cursor: p.id === myId ? (lobbyIsHolding ? "grabbing" : "grab") : "default", 
-                                            touchAction: p.id === myId ? "none" : undefined 
+                                            cursor: p.id === myId ? (lobbyIsHolding ? "grabbing" : "grab") : "default",
+                                            touchAction: p.id === myId ? "none" : undefined
                                         }}
                                     >
                                         <Avatar profileId={p.profileId} username={p.username} size={44} />
@@ -484,7 +486,7 @@ export default function Lobby({
                         flexDirection: "column", gap: 16
                     }}>
                         {amHost ? (
-                            <div className="panel-glow" style={{ padding: 20 }}>
+                            <div className="panel-glow cp-bg-mood cp-bg-davidxlucy" style={{ padding: 20 }}>
                                 <div style={{
                                     fontSize: 9, color: "#4a3060", letterSpacing: "0.15em",
                                     marginBottom: 16
@@ -646,8 +648,8 @@ export default function Lobby({
                             </div>
                         )}
 
-                        <button className="btn" style={{ 
-                            width: "100%", 
+                        <button className="btn" style={{
+                            width: "100%",
                             color: "#ff2a2a",
                             borderColor: "#ff2a2a44",
                             background: "transparent"
@@ -854,15 +856,15 @@ export default function Lobby({
                         />
                     </div>
                 )}
-            {lobbyEmoteWheel && (
-                <EmoteWheel
-                    cx={lobbyEmoteWheel.cx}
-                    cy={lobbyEmoteWheel.cy}
-                    emotes={lobbyEmoteWheel.emotes} borderRadius={lobbyEmoteWheel.borderRadius}
-                    onSelect={emote => { setLobbyEmoteWheel(null); emit("player:emote", { roomId, emote }); }}
-                    onClose={() => setLobbyEmoteWheel(null)}
-                />
-            )}
+                {lobbyEmoteWheel && (
+                    <EmoteWheel
+                        cx={lobbyEmoteWheel.cx}
+                        cy={lobbyEmoteWheel.cy}
+                        emotes={lobbyEmoteWheel.emotes} borderRadius={lobbyEmoteWheel.borderRadius}
+                        onSelect={emote => { setLobbyEmoteWheel(null); emit("player:emote", { roomId, emote }); }}
+                        onClose={() => setLobbyEmoteWheel(null)}
+                    />
+                )}
             </div>
         );
     }
@@ -878,7 +880,7 @@ export default function Lobby({
                 <div style={{ fontSize: 9, color: "#4a3060", letterSpacing: "0.25em", marginBottom: 14 }}>
                     DEEP SPACE SOCIAL DEDUCTION
                 </div>
-                <h1 className="glow-cyan" style={{ fontSize: 32, letterSpacing: "0.08em" }}>
+                <h1 className="glow-cyan cp-title-flicker cp-flicker-shake" style={{ fontSize: 32, letterSpacing: "0.08em" }}>
                     PROJECT<br />NEBULA
                 </h1>
                 <div style={{
@@ -919,7 +921,7 @@ export default function Lobby({
                 <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
 
                     {/* Left: form */}
-                    <div className="panel-glow" style={{
+                    <div className="panel-glow cp-bg-mood cp-bg-cyber" style={{
                         flex: "1 1 340px", padding: 28,
                         display: "flex", flexDirection: "column", gap: 20
                     }}>
@@ -938,7 +940,7 @@ export default function Lobby({
                         {mode === "join" && (
                             <>
                                 <div>
-                                    <label style={{
+                                    <label className="cp-room-code cp-flicker-shake" style={{
                                         display: "block", fontSize: 9, color: "#4a3060",
                                         letterSpacing: "0.15em", marginBottom: 10
                                     }}>
@@ -993,49 +995,77 @@ export default function Lobby({
                         </button>
                     </div>
 
-                    {/* Right: profile picker */}
+                    {/* Right: profile picker + theme */}
                     <div style={{ flex: "1 1 380px", display: "flex", flexDirection: "column", gap: 12 }}>
+                        {/* Theme selector */}
+                        <div>
+                            <div style={{ fontSize: 9, color: "#4a3060", letterSpacing: "0.15em", marginBottom: 8 }}>
+                                VISUAL THEME
+                            </div>
+                            <select
+                                className="cp-theme-select"
+                                value={currentTheme}
+                                onChange={e => {
+                                    const t = e.target.value;
+                                    setCurrentTheme(t);
+                                    applyTheme(t);
+                                }}
+                                style={{
+                                    fontFamily: "Press Start 2P, monospace",
+                                    fontSize: 9, padding: "10px 14px",
+                                    background: "#0a0016",
+                                    border: "1px solid #2a1a4a",
+                                    color: "#e0d4ff",
+                                    cursor: "pointer",
+                                    outline: "none",
+                                    width: "100%",
+                                }}>
+                                <option value="standard">▫ STANDARD</option>
+                                <option value="cyberpunk">◈ CYBERPUNK — EDGERUNNERS</option>
+                            </select>
+                        </div>
                         <div style={{ fontSize: 9, color: "#4a3060", letterSpacing: "0.15em" }}>
                             SELECT PROFILE
                         </div>
                         <div style={{
-                                display: "grid",
-                                gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
-                                gap: 10, maxHeight: 460, overflowY: "auto", paddingRight: 4,
-                            }}>
-                                {PROFILES.map(p => {
-                                    const color = AVATAR_COLORS[p.id] || "#c8b8ff";
-                                    const selected = profileId === p.id;
-                                    const taken = takenProfiles.includes(p.id) && !selected;
-                                    return (
-                                        <button key={p.id}
-                                            onClick={() => !taken && setProfileId(p.id)}
-                                            disabled={taken}
-                                            style={{
-                                                display: "flex", flexDirection: "column", alignItems: "center",
-                                                gap: 10, padding: 14,
-                                                border: `2px solid ${selected ? color : taken ? "#1a0a2a" : "#2a1a4a"}`,
-                                                background: selected ? color + "12" : "transparent",
-                                                boxShadow: selected ? `0 0 20px ${color}44` : "none",
-                                                cursor: taken ? "not-allowed" : "pointer",
-                                                opacity: taken ? 0.3 : 1,
-                                                transition: "all 0.15s",
-                                                fontFamily: "Press Start 2P",
-                                            }}>
-                                            <Avatar profileId={p.id} username={p.name} size={64} color={color} />
-                                            <span style={{
-                                                fontSize: 8, color: selected ? color : "#8a7aa0",
-                                                textAlign: "center", lineHeight: 1.5
-                                            }}>
-                                                {p.name}
-                                            </span>
-                                            {taken && (
-                                                <span style={{ fontSize: 7, color: "#2a1a3a" }}>TAKEN</span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                            gap: 10, maxHeight: 460, overflowY: "auto", paddingRight: 4,
+                        }}>
+                            {PROFILES.map(p => {
+                                const color = AVATAR_COLORS[p.id] || "#c8b8ff";
+                                const selected = profileId === p.id;
+                                const taken = takenProfiles.includes(p.id) && !selected;
+                                return (
+                                    <button key={p.id}
+                                        className={`cp-profile-btn ${selected ? "cp-profile-selected" : ""}`}
+                                        onClick={() => !taken && setProfileId(p.id)}
+                                        disabled={taken}
+                                        style={{
+                                            display: "flex", flexDirection: "column", alignItems: "center",
+                                            gap: 10, padding: 14,
+                                            border: `2px solid ${selected ? color : taken ? "#1a0a2a" : "#2a1a4a"}`,
+                                            background: selected ? color + "12" : "transparent",
+                                            boxShadow: selected ? `0 0 20px ${color}44` : "none",
+                                            cursor: taken ? "not-allowed" : "pointer",
+                                            opacity: taken ? 0.3 : 1,
+                                            transition: "all 0.15s",
+                                            fontFamily: "Press Start 2P",
+                                        }}>
+                                        <Avatar profileId={p.id} username={p.name} size={64} color={color} />
+                                        <span style={{
+                                            fontSize: 8, color: selected ? color : "#8a7aa0",
+                                            textAlign: "center", lineHeight: 1.5
+                                        }}>
+                                            {p.name}
+                                        </span>
+                                        {taken && (
+                                            <span style={{ fontSize: 7, color: "#2a1a3a" }}>TAKEN</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>
