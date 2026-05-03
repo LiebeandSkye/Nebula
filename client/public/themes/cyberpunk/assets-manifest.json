@@ -1,0 +1,29 @@
+{
+  "theme": "cyberpunk",
+  "images": {
+    "setupPanel": {
+      "file": "Cyberpunk.jpg",
+      "usage": "Create/join room panel background"
+    },
+    "chatPanel": {
+      "file": "Room.jpg",
+      "usage": "Chat panel background with dark HUD overlay"
+    },
+    "settingsPanel": {
+      "file": "Lucy.jpg",
+      "usage": "In-game settings panel background with dark HUD overlay"
+    },
+    "lobbyPanels": {
+      "file": "DavidxLucy.jpg",
+      "usage": "Lobby panel backgrounds"
+    }
+  },
+  "retina": {
+    "status": "pending-source-assets",
+    "note": "Current source images are optimized single exports. Add @2x variants here when designer exports are available."
+  },
+  "icons": {
+    "status": "pending-designer-export",
+    "recommendedViewBoxes": [24, 32, 48]
+  }
+}

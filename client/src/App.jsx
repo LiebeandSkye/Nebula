@@ -267,10 +267,10 @@ function IllusionistPregameOverlay({ state, socket, onResolved }) {
                         padding: 24,
                         textAlign: "center",
                     }}>
-                        <div style={{ 
-                            fontSize: 32, 
-                            color: "#9b30ff", 
-                            marginBottom: 12, 
+                        <div style={{
+                            fontSize: 32,
+                            color: "#9b30ff",
+                            marginBottom: 12,
                             filter: "drop-shadow(0 0 8px #9b30ff)",
                             display: "flex",
                             justifyContent: "center"
@@ -507,7 +507,7 @@ export default function App() {
     // Render keep-awake heartbeat (best effort).
     useEffect(() => {
         const ping = () => {
-            wakeProbe().catch(() => {});
+            wakeProbe().catch(() => { });
         };
 
         ping();

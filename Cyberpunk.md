@@ -77,4 +77,4 @@ Unify the Cyberpunk theme into a cohesive Edgerunners-like HUD: cleaner high-con
 
 Note: The playerCard ensure that it has all contents inside and fit everything. the background image of cyberpunk folder should be dim but still visible and is able to see clearly.
 
-
+Summary: I want to add a new theme called "Cyberpunk" inspired by cyberpunk edgerunner and cyberpunk 2077. I want every design to change, but keep game logic the same. Im going to create a Cyberpunk folder and put all my assets there, so within the prompt, mention where the asset should be as well. Think to design where you think will fit like chatpanel or lobby or setting (the button) background or anything at all.

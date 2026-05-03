@@ -92,7 +92,7 @@ export default function GameOverScreen({
             )}
             <div style={{ fontSize: 80, filter: `drop-shadow(0 0 30px ${wc})` }}>{hw ? "◈" : "👁"}</div>
             <div style={{ textAlign: "center" }}>
-                <h1 style={{ fontSize: 28, color: wc, textShadow: `0 0 20px ${wc}`, marginBottom: 12 }}>
+                <h1 className="cp-title-flicker cp-flicker-shake" style={{ fontSize: 28, color: wc, textShadow: `0 0 20px ${wc}`, marginBottom: 12 }}>
                     {hw ? "HUMANS WIN" : "GNOSIA WIN"}
                 </h1>
                 <p style={{ fontSize: 10, color: "#4a3060" }}>
@@ -100,7 +100,7 @@ export default function GameOverScreen({
                 </p>
             </div>
             <div style={{ border: `1px solid ${wc}33`, padding: 24, maxWidth: 480, width: "100%", background: "#0d002088" }}>
-                <div style={{ fontSize: 9, color: "#4a3060", marginBottom: 16 }}>FINAL MANIFEST</div>
+                <div style={{ fontSize: 9, color: "#ff8c1a", marginBottom: 16 }}>RESULT</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {result.players.map(p => {
                         const rc = ROLE_COLORS[p.role] || "#c8b8ff";

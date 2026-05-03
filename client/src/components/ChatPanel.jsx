@@ -16,7 +16,7 @@ function MsgBubble({ msg, isMe, socketId }) {
     if (msg.type === "system") {
         return (
             <div style={{ display: "flex", justifyContent: "center", margin: "14px 0" }}>
-                <div style={{
+                <div className="chat-bubble--system" style={{
                     fontSize: 8, color: "#8a7aa0",
                     borderTop: "1px dashed #2a1a4a", borderBottom: "1px dashed #2a1a4a",
                     padding: "6px 16px",
@@ -33,6 +33,13 @@ function MsgBubble({ msg, isMe, socketId }) {
     const deadColor = "#ff6b6b";
 
     const finalIsMe = isMe || (msg.senderId === socketId);
+    const channelClass = msg.channel === "gnosia" ? "chat-bubble--gnosia" : "chat-bubble--crew";
+    const bubbleClasses = [
+        "chat-bubble",
+        channelClass,
+        finalIsMe ? "chat-bubble--me" : "",
+        isDead ? "chat-bubble--dead" : "",
+    ].filter(Boolean).join(" ");
 
     return (
         <div style={{
@@ -81,7 +88,7 @@ function MsgBubble({ msg, isMe, socketId }) {
                 <span style={{ fontSize: 7, color: "#2a1a3a" }}>{msg.time}</span>
             </div>
             {/* Bubble */}
-            <div style={{
+            <div className={bubbleClasses} style={{
                 maxWidth: "75%", padding: "10px 14px",
                 background: finalIsMe
                     ? (msg.channel === "gnosia" ? "#9b30ff18" : "#00f5ff12")
@@ -160,11 +167,11 @@ export default function ChatPanel({
     const tabColor = tab === "gnosia" ? "#9b30ff" : "#00f5ff";
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", minHeight: 0, position: "relative" }}>
+        <div className="cp-chat-panel cp-bg-mood cp-bg-room" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", minHeight: 0, position: "relative" }}>
 
             {/* Tab bar */}
-            <div style={{ display: "flex", borderBottom: "1px solid #1a0a2a", flexShrink: 0 }}>
-                <button onClick={() => onTabChange?.("public")} style={{
+            <div className="cp-chat-tabs" style={{ display: "flex", borderBottom: "1px solid #1a0a2a", flexShrink: 0 }}>
+                <button className={`cp-chat-tab cp-chat-tab--crew ${tab === "public" ? "cp-chat-tab--active" : ""}`} onClick={() => onTabChange?.("public")} style={{
                     flex: 1, padding: "13px 0", fontSize: 9,
                     fontFamily: "Press Start 2P", cursor: "pointer",
                     background: tab === "public" ? "#00f5ff0d" : "transparent",
@@ -198,7 +205,7 @@ export default function ChatPanel({
                     {!pubOpen && <span style={{ fontSize: 7, color: "#2a1a3a", marginTop: 4, display: "block" }}>[CLOSED]</span>}
                 </button>
                 {isGnosia && (
-                    <button onClick={() => onTabChange?.("gnosia")} style={{
+                    <button className={`cp-chat-tab cp-chat-tab--gnosia ${tab === "gnosia" ? "cp-chat-tab--active" : ""}`} onClick={() => onTabChange?.("gnosia")} style={{
                         flex: 1, padding: "13px 0", fontSize: 9,
                         fontFamily: "Press Start 2P", cursor: "pointer",
                         background: tab === "gnosia" ? "#9b30ff0d" : "transparent",
@@ -234,7 +241,7 @@ export default function ChatPanel({
             </div>
 
             {/* Channel indicator */}
-            <div style={{
+            <div className={`cp-chat-channel cp-chat-channel--${tab}`} style={{
                 padding: "10px 16px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between",
                 background: tab === "gnosia" ? "#13002533" : "#07000f44",
                 borderBottom: "1px solid #1a0a2a",
@@ -254,6 +261,7 @@ export default function ChatPanel({
                 </div>
                 {onExpand && (
                     <div 
+                        className="cp-chat-expand"
                         onClick={(e) => { e.stopPropagation(); onExpand(); }} 
                         style={{ 
                             color: "#00f5ff", 
@@ -271,9 +279,9 @@ export default function ChatPanel({
             </div>
 
             {/* Messages */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px", minHeight: 0 }}>
+            <div className="cp-chat-messages" style={{ flex: 1, overflowY: "auto", padding: "16px 14px", minHeight: 0 }}>
                 {msgs.length === 0 && (
-                    <div style={{
+                    <div className="cp-chat-empty" style={{
                         height: "100%", display: "flex", alignItems: "center",
                         justifyContent: "center"
                     }}>
@@ -292,7 +300,7 @@ export default function ChatPanel({
 
             {/* Identity Switcher UI */}
             {tab === "public" && myRole === "illusionist" && (
-                <div style={{
+                <div className="cp-chat-identity" style={{
                     flexShrink: 0, padding: "8px 12px", background: "#1a002a", 
                     borderTop: "1px solid #330066", display: "flex", 
                     alignItems: "center", justifyContent: "space-between"
@@ -318,7 +326,7 @@ export default function ChatPanel({
                     </div>
                     <button 
                         onClick={() => setShowImpersonateModal(true)}
-                        className="btn" 
+                        className="btn cp-chat-identity-btn" 
                         style={{ padding: "4px 8px", fontSize: 8, borderColor: "#9b30ff", color: "#9b30ff" }}>
                         SWITCH
                     </button>
@@ -326,7 +334,7 @@ export default function ChatPanel({
             )}
 
             {/* Input */}
-            <div style={{
+            <div className="cp-chat-input-tray" style={{
                 flexShrink: 0, borderTop: "1px solid #1a0a2a", padding: 12,
                 background: "#07000f"
             }}>
@@ -340,7 +348,7 @@ export default function ChatPanel({
                     </div>
                 ) : (
                     <div style={{ display: "flex", gap: 10 }}>
-                        <input ref={inputRef} className="input"
+                        <input ref={inputRef} className="input cp-chat-input"
                             style={{ fontSize: 10, borderColor: tab === "gnosia" ? "#9b30ff44" : undefined }}
                             placeholder={tab === "gnosia" ? "gnosia only..." : (!isAlive ? "spectral chat..." : "transmit message...")}
                             value={input}
@@ -348,7 +356,7 @@ export default function ChatPanel({
                             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                             maxLength={300}
                         />
-                        <button className={`btn btn-sm ${tab === "gnosia" ? "btn-gnosia" : ""}`}
+                        <button className={`btn btn-sm cp-chat-send ${tab === "gnosia" ? "btn-gnosia" : ""}`}
                             onClick={send} disabled={!input.trim() || sending}
                             style={{ flexShrink: 0, minWidth: 48 }}>
                             {sending ? "·" : "►"}
@@ -358,18 +366,19 @@ export default function ChatPanel({
             </div>
             {/* Impersonate Modal */}
             {showImpersonateModal && (
-                <div style={{
+                <div className="cp-impersonate-modal" style={{
                     position: "absolute", bottom: 0, left: 0, right: 0, top: 0,
                     background: "rgba(10, 0, 20, 0.95)", zIndex: 10,
                     display: "flex", flexDirection: "column",
                     animation: "fadeInUp 0.2s ease"
                 }}>
-                    <div style={{ padding: 12, borderBottom: "1px solid #9b30ff44", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div className="cp-impersonate-header" style={{ padding: 12, borderBottom: "1px solid #9b30ff44", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: 9, color: "#9b30ff", fontFamily: "Press Start 2P" }}>SHAPESHIFT</span>
                         <button onClick={() => setShowImpersonateModal(false)} style={{ background: "transparent", border: "none", color: "#ff2a2a", cursor: "pointer", fontSize: 12 }}>✕</button>
                     </div>
                     <div style={{ padding: 12 }}>
                         <input 
+                            className="cp-impersonate-search"
                             placeholder="Search crew..." 
                             value={impersonateSearch}
                             onChange={e => setImpersonateSearch(e.target.value)}
@@ -380,8 +389,9 @@ export default function ChatPanel({
                             }} 
                         />
                     </div>
-                    <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div className="cp-impersonate-list" style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
                         <button 
+                            className="cp-impersonate-option"
                             onClick={() => { setImpersonatingId(null); setShowImpersonateModal(false); }}
                             style={{ 
                                 padding: 12, background: !impersonatingId ? "#9b30ff22" : "#1a0f2e", 
@@ -397,6 +407,7 @@ export default function ChatPanel({
                         {players.filter(p => p.alive && p.id !== myId && p.username.toLowerCase().includes(impersonateSearch.toLowerCase())).map(p => (
                             <button 
                                 key={p.id}
+                                className="cp-impersonate-option"
                                 onClick={() => { setImpersonatingId(p.id); setShowImpersonateModal(false); }}
                                 style={{ 
                                     padding: 12, background: impersonatingId === p.id ? "#9b30ff22" : "#1a0f2e", 

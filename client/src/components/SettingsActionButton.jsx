@@ -9,6 +9,7 @@ export default function SettingsActionButton({
 }) {
     return (
         <button
+            className="cp-settings-action-btn"
             onClick={onClick}
             disabled={disabled}
             style={{

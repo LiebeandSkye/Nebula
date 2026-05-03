@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:theme": "node ./src/lib/themeStore.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

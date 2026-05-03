@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { animate } from "animejs";
+import { getStoredTheme, applyTheme } from "../lib/themeStore.js";
 import { useSocketEvent } from "../hooks/useSocket";
 import PlayerCard from "../components/PlayerCard.jsx";
 import EmoteWheel, { getRandomEmotes } from "../components/EmoteWheel.jsx";
@@ -36,51 +37,52 @@ export default function Game({
 }) {
     const { roomId, myId, myRole, allies: initialAllies = [], gnosiaCount } = session;
 
-    const [players,       setPlayers]       = useState(session.lastPhasePayload?.players || []);
-    const [allies,        setAllies]        = useState(initialAllies);
-    const [phase,         setPhase]         = useState(session.lastPhasePayload?.phase || session.phase || "DAY_DISCUSSION");
-    const [round,         setRound]         = useState(session.lastPhasePayload?.round || 1);
-    const [timers,        setTimers]        = useState(session.lastPhasePayload?.timers || {});
+    const [players, setPlayers] = useState(session.lastPhasePayload?.players || []);
+    const [allies, setAllies] = useState(initialAllies);
+    const [phase, setPhase] = useState(session.lastPhasePayload?.phase || session.phase || "DAY_DISCUSSION");
+    const [round, setRound] = useState(session.lastPhasePayload?.round || 1);
+    const [timers, setTimers] = useState(session.lastPhasePayload?.timers || {});
     const [morningReport, setMorningReport] = useState(null);
-    const [showOverlay,   setShowOverlay]   = useState(true);
-    const [gameOver,      setGameOver]      = useState(null);
+    const [showOverlay, setShowOverlay] = useState(true);
+    const [gameOver, setGameOver] = useState(null);
 
-    const [selectedTarget,       setSelectedTarget]       = useState(null);
-    const [nightSubmitted,       setNightSubmitted]       = useState(false);
-    const [actionError,          setActionError]          = useState("");
-    const [actionMsg,            setActionMsg]            = useState("");
-    const [voteProgress,         setVoteProgress]         = useState({ votesCast: 0, totalAlive: 0 });
-    const [gnosiaVP,             setGnosiaVP]             = useState({ votesIn: 0, totalGnosia: 0 });
-    const [scanResult,           setScanResult]           = useState(null);
-    const [inspectResult,        setInspectResult]        = useState(null);
-    const [guardianResult,       setGuardianResult]       = useState(null);
-    const [scannedAlert,         setScannedAlert]         = useState(false);
-    const [hasVoted,             setHasVoted]             = useState(false);
-    const [hasLawyerDismissed,   setHasLawyerDismissed]   = useState(false);
-    const [voteDismissed,        setVoteDismissed]        = useState(null);
-    const [resultModal,          setResultModal]          = useState(null);
-    const [showStartReveal,      setShowStartReveal]      = useState(false);
-    const [hasShownStartReveal,  setHasShownStartReveal]  = useState(false);
-    const [showRoleInfo,         setShowRoleInfo]         = useState(false);
-    const [voteReveal,           setVoteReveal]           = useState(null);
-    const [voteBreakdown,        setVoteBreakdown]        = useState(null);
-    const [skipVotes,            setSkipVotes]            = useState(session.lastPhasePayload?.skipVotes || []);
+    const [selectedTarget, setSelectedTarget] = useState(null);
+    const [nightSubmitted, setNightSubmitted] = useState(false);
+    const [actionError, setActionError] = useState("");
+    const [actionMsg, setActionMsg] = useState("");
+    const [voteProgress, setVoteProgress] = useState({ votesCast: 0, totalAlive: 0 });
+    const [gnosiaVP, setGnosiaVP] = useState({ votesIn: 0, totalGnosia: 0 });
+    const [scanResult, setScanResult] = useState(null);
+    const [inspectResult, setInspectResult] = useState(null);
+    const [guardianResult, setGuardianResult] = useState(null);
+    const [scannedAlert, setScannedAlert] = useState(false);
+    const [hasVoted, setHasVoted] = useState(false);
+    const [hasLawyerDismissed, setHasLawyerDismissed] = useState(false);
+    const [voteDismissed, setVoteDismissed] = useState(null);
+    const [resultModal, setResultModal] = useState(null);
+    const [showStartReveal, setShowStartReveal] = useState(false);
+    const [hasShownStartReveal, setHasShownStartReveal] = useState(false);
+    const [showRoleInfo, setShowRoleInfo] = useState(false);
+    const [voteReveal, setVoteReveal] = useState(null);
+    const [voteBreakdown, setVoteBreakdown] = useState(null);
+    const [skipVotes, setSkipVotes] = useState(session.lastPhasePayload?.skipVotes || []);
     const [lostConnectionNotice, setLostConnectionNotice] = useState("");
-    const [unread,               setUnread]               = useState({ public: 0, gnosia: 0 });
+    const [unread, setUnread] = useState({ public: 0, gnosia: 0 });
 
-    const [isRolling,   setRolling]   = useState(false);
+    const [isRolling, setRolling] = useState(false);
     const [rollingAura, setRollingAura] = useState("aura-rage-mode");
     const [showAuraPicker, setShowAuraPicker] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
-    const [auraVisibility,   setAuraVisibility]   = useState("all");
-    const [emoteVisibility,  setEmoteVisibility]  = useState("all");
+    const [auraVisibility, setAuraVisibility] = useState("all");
+    const [emoteVisibility, setEmoteVisibility] = useState("all");
+    const [currentTheme, setCurrentTheme] = useState(getStoredTheme);
 
     // Emote state
-    const [playerEmotes,  setPlayerEmotes]  = useState({});  // { [playerId]: { src, label, id } }
-    const [emoteWheel,    setEmoteWheel]    = useState(null); // { cx, cy, emotes[] }
+    const [playerEmotes, setPlayerEmotes] = useState({});  // { [playerId]: { src, label, id } }
+    const [emoteWheel, setEmoteWheel] = useState(null); // { cx, cy, emotes[] }
     const emoteTimeoutsRef = useRef({});
 
-    const [isMobile,       setIsMobile]       = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
     const [desktopChat, setDesktopChat] = useState(false);
     const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
@@ -147,11 +149,11 @@ export default function Game({
         else if (tab === "gnosia") setUnreadGn(0);
     };
 
-    const me         = players.find(p => p.id === myId);
-    const isNight    = phase === "NIGHT";
-    const isVoting   = phase === "VOTING";
+    const me = players.find(p => p.id === myId);
+    const isNight = phase === "NIGHT";
+    const isVoting = phase === "VOTING";
     const phaseColor = PHASE_COLORS[phase] || "#00f5ff";
-    const roleColor  = ROLE_COLORS[myRole] || "#c8b8ff";
+    const roleColor = ROLE_COLORS[myRole] || "#c8b8ff";
     const totalUnread = unread.public + unread.gnosia;
 
     useEffect(() => {
@@ -341,6 +343,7 @@ export default function Game({
             )}
             {showSettingsModal && (
                 <div
+                    className="modal--settings-overlay"
                     onClick={() => setShowSettingsModal(false)}
                     style={{
                         position: "fixed",
@@ -353,6 +356,7 @@ export default function Game({
                         padding: 20,
                     }}>
                     <div
+                        className="modal--settings cp-settings-bg"
                         onClick={e => e.stopPropagation()}
                         style={{
                             width: "min(560px, 94vw)",
@@ -360,8 +364,10 @@ export default function Game({
                             border: "1px solid rgba(255, 140, 26, 0.7)",
                             boxShadow: "0 0 0 1px rgba(255, 140, 26, 0.18), 0 0 28px rgba(255, 140, 26, 0.22)",
                             padding: 24,
+                            maxHeight: "85vh",
+                            overflowY: "auto",
                         }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+                        <div className="cp-settings-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#ff9b3d" }}>
                                 <CiSettings size={22} />
                                 <span style={{ fontSize: 11, letterSpacing: "0.18em" }}>SETTING</span>
@@ -373,8 +379,34 @@ export default function Game({
                                 CLOSE
                             </button>
                         </div>
-                        <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(255, 140, 26, 0.9), transparent)", marginBottom: 18 }} />
+                        <div className="cp-settings-divider" style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(255, 140, 26, 0.9), transparent)", marginBottom: 18 }} />
                         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                            {/* Theme selector */}
+                            <div style={{ marginBottom: 6 }}>
+                                <div style={{ fontSize: 8, color: "#8a7aa0", letterSpacing: "0.12em", marginBottom: 8 }}>VISUAL THEME</div>
+                                <select
+                                    className="cp-theme-select"
+                                    value={currentTheme}
+                                    onChange={e => {
+                                        const t = e.target.value;
+                                        setCurrentTheme(t);
+                                        applyTheme(t);
+                                    }}
+                                    style={{
+                                        fontFamily: "Press Start 2P, monospace",
+                                        fontSize: 9, padding: "10px 14px",
+                                        background: "#0a0016",
+                                        border: "1px solid #2a1a4a",
+                                        color: "#e0d4ff",
+                                        cursor: "pointer",
+                                        outline: "none",
+                                        width: "100%",
+                                    }}>
+                                    <option value="standard">▫ STANDARD</option>
+                                    <option value="cyberpunk">◈ CYBERPUNK — EDGERUNNERS</option>
+                                </select>
+                            </div>
+                            <div style={{ height: 1, background: "linear-gradient(90deg, transparent, #2a1a4a, transparent)", margin: "2px 0" }} />
                             <SettingsActionButton
                                 label={`ROLL AURA (${me?.rollsRemaining ?? 0})`}
                                 status={canRollAura ? "READY" : "LOCKED"}
@@ -442,7 +474,7 @@ export default function Game({
                                 status={emoteVisibility === "all" ? "ACTIVE" : "OFF"}
                                 active={emoteVisibility === "all"}
                                 onClick={() => setEmoteVisibility("all")}
-                                />
+                            />
                             <div style={{ fontSize: 8, color: "#b97b4e", lineHeight: 1.8, marginTop: 6 }}>
                                 These settings affect only your screen.
                             </div>
@@ -489,24 +521,24 @@ export default function Game({
     );
 
     const topBar = (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid #1a0a2a", background: "#08001299", flexShrink: 0, flexWrap: "wrap", gap: 10 }}>
+        <div className="cp-game-topbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid #1a0a2a", background: "#08001299", flexShrink: 0, flexWrap: "wrap", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ fontSize: isMobile ? 8 : 10, border: `1px solid ${phaseColor}55`, color: phaseColor, padding: "6px 14px", background: phaseColor + "0a" }}>{phase.replace(/_/g, " ")}</div>
-                <div style={{ fontSize: 9, color: "#4a3060" }}>RND {round}</div>
+                <div className="cp-phase-chip" style={{ fontSize: isMobile ? 8 : 10, border: `1px solid ${phaseColor}55`, color: "#8a7aa0", padding: "6px 14px", background: phaseColor + "0a" }}>{phase.replace(/_/g, " ")}</div>
+                <div className="cp-round-chip" style={{ fontSize: 9, color: "#4a3060" }}>RND {round}</div>
             </div>
             {timers.endsAt && <PhaseTimer endsAt={timers.endsAt} color={phaseColor} />}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {me && !me.alive && (
-                    <div className="btn-topbar" style={{ background: "#5a0000", border: "1px solid #7a0000", cursor: "default" }}>
+                    <div className="btn-topbar cp-topbar-chip cp-topbar-chip--dead" style={{ background: "#5a0000", border: "1px solid #7a0000", cursor: "default" }}>
                         DEAD
                     </div>
                 )}
-                <button onClick={() => setShowRoleInfo(true)} className="btn-topbar" style={{ border: `1px solid ${roleColor}55`, color: roleColor }}>
+                <button onClick={() => setShowRoleInfo(true)} className="btn-topbar cp-topbar-chip cp-role-chip" style={{ border: `1px solid ${roleColor}55`, color: roleColor }}>
                     {myRole?.toUpperCase()} ?
                 </button>
                 <button
                     onClick={openSettingsModal}
-                    className="btn-topbar"
+                    className="btn-topbar cp-topbar-chip cp-settings-chip"
                     style={{
                         border: "1px solid #ff8c1a88",
                         color: "#ff9b3d",
@@ -516,7 +548,7 @@ export default function Game({
                     <CiSettings size={18} /> SETTING
                 </button>
                 {!isMobile && (
-                    <button onClick={() => setDesktopChat(o => !o)} className="btn-topbar" style={{ color: "#8a7aa0" }}>
+                    <button onClick={() => setDesktopChat(o => !o)} className="btn-topbar cp-topbar-chip cp-chat-toggle-chip" style={{ color: "#8a7aa0" }}>
                         {desktopChat ? "HIDE CHAT" : "SHOW CHAT"}
                     </button>
                 )}
@@ -548,15 +580,15 @@ export default function Game({
                         </div>
                     </div>
                     {isVoting && me?.alive && (
-                        <div style={{ flexShrink: 0, borderTop: "1px solid #1a0a2a", padding: "14px 16px", background: "#07000f" }}>
+                        <div className="cp-vote-tray" style={{ flexShrink: 0, borderTop: "1px solid #1a0a2a", padding: "14px 16px", background: "#07000f" }}>
                             {actionError && <div style={{ fontSize: 8, color: "#ff2a2a", marginBottom: 8 }}>⚠ {actionError}</div>}
-                            {actionMsg && <div style={{ fontSize: 8, color: "#00f5ff", marginBottom: 8 }}>{actionMsg}</div>}
-                            <button className="btn btn-gold" style={{ width: "100%", fontSize: 10 }} onClick={submitVote} disabled={!selectedTarget || hasVoted}>{hasVoted ? "✓ VOTE LOCKED" : selectedTarget ? `⚖ VOTE: ${players.find(p => p.id === selectedTarget)?.username}` : "SELECT TO VOTE"}</button>
-                            {myRole === "lawyer" && <button style={{ width: "100%", marginTop: 10, padding: "10px", fontSize: 9, background: hasLawyerDismissed ? "#1a0a2a" : "#7a3a00", color: hasLawyerDismissed ? "#3a2a4a" : "#ffbb55", border: "1px solid #ff8833", fontFamily: "Press Start 2P" }} onClick={dismissVote} disabled={hasLawyerDismissed}>{hasLawyerDismissed ? "DISMISS USED" : "⚖ DISMISS VOTE"}</button>}
+                            {actionMsg && <div style={{ fontSize: 8, color: "#ffaa33", marginBottom: 8 }}>{actionMsg}</div>}
+                            <button className="btn btn-gold cp-vote-button" style={{ width: "100%", fontSize: 10 }} onClick={submitVote} disabled={!selectedTarget || hasVoted}>{hasVoted ? "✓ VOTE LOCKED" : selectedTarget ? `⚖ VOTE: ${players.find(p => p.id === selectedTarget)?.username}` : "SELECT TO VOTE"}</button>
+                            {myRole === "lawyer" && <button className="cp-lawyer-button" style={{ width: "100%", marginTop: 10, padding: "10px", fontSize: 9, background: hasLawyerDismissed ? "#1a0a2a" : "#7a3a00", color: hasLawyerDismissed ? "#3a2a4a" : "#ffbb55", border: "1px solid #ff8833", fontFamily: "Press Start 2P" }} onClick={dismissVote} disabled={hasLawyerDismissed}>{hasLawyerDismissed ? "DISMISS USED" : "⚖ DISMISS VOTE"}</button>}
                         </div>
                     )}
                     {showSkipBar && (
-                        <div style={{ flexShrink: 0, borderTop: "1px solid #1a0a2a", padding: "12px 16px", background: "#07000f" }}>
+                        <div className="cp-skip-tray" style={{ flexShrink: 0, borderTop: "1px solid #1a0a2a", padding: "12px 16px", background: "#07000f" }}>
                             <SkipBar skipVotes={skipVotes} myId={myId} onSkip={requestSkipPhase} actionError={actionError} actionMsg={actionMsg} />
                         </div>
                     )}
@@ -572,7 +604,7 @@ export default function Game({
             {topBar}
             {isMobile ? (
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                    {! (isNight && (isGnosiaRole(myRole) || myRole === "doctor")) && (
+                    {!(isNight && (isGnosiaRole(myRole) || myRole === "doctor")) && (
                         <div style={{ flexShrink: 0, borderBottom: "1px solid #1a0a2a", background: "#07000f", overflowY: "auto", maxHeight: 210 }}>
                             <div style={{ padding: "10px 12px" }}>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -586,37 +618,37 @@ export default function Game({
                     ) : (
                         <div style={{ flexShrink: 0 }}>
                             {isVoting && me?.alive ? (
-                                <div style={{ 
-                                    padding: "16px", background: "#0d0020", 
+                                <div className="cp-vote-tray cp-vote-tray--mobile" style={{
+                                    padding: "16px", background: "#0d0020",
                                     display: "flex", flexDirection: "column", gap: 12,
                                     borderBottom: "1px solid #1a0a2a",
                                     boxShadow: "0 4px 20px rgba(0,0,0,0.5)"
                                 }}>
                                     {/* Main Vote Button */}
-                                    <button 
-                                        className="btn btn-gold" 
-                                        style={{ width: "100%", fontSize: 10, height: 48, boxShadow: "0 0 15px #ffd70022" }} 
-                                        onClick={submitVote} 
+                                    <button
+                                        className="btn btn-gold"
+                                        style={{ width: "100%", fontSize: 10, height: 48, boxShadow: "0 0 15px #ffd70022" }}
+                                        onClick={submitVote}
                                         disabled={!selectedTarget || hasVoted}
                                     >
                                         {hasVoted ? "✓ VOTE LOCKED" : selectedTarget ? `⚖ VOTE: ${players.find(p => p.id === selectedTarget)?.username || "TARGET"}` : "SELECT TO VOTE"}
                                     </button>
-                                    
+
                                     {/* Lawyer Dismiss Button - More prominently styled */}
                                     {myRole === "lawyer" && (
-                                        <button 
-                                            className="btn"
-                                            style={{ 
-                                                width: "100%", 
+                                        <button
+                                            className="btn cp-lawyer-button"
+                                            style={{
+                                                width: "100%",
                                                 height: 44,
-                                                fontSize: 8, 
+                                                fontSize: 8,
                                                 letterSpacing: "0.05em",
-                                                background: hasLawyerDismissed ? "#1a0a2a66" : "#7a3a0022", 
-                                                color: hasLawyerDismissed ? "#3a2a4a" : "#ffbb55", 
-                                                border: `1px solid ${hasLawyerDismissed ? "#2a1a4a" : "#ff8833"}`, 
-                                                fontFamily: "Press Start 2P" 
-                                            }} 
-                                            onClick={dismissVote} 
+                                                background: hasLawyerDismissed ? "#1a0a2a66" : "#7a3a0022",
+                                                color: hasLawyerDismissed ? "#3a2a4a" : "#ffbb55",
+                                                border: `1px solid ${hasLawyerDismissed ? "#2a1a4a" : "#ff8833"}`,
+                                                fontFamily: "Press Start 2P"
+                                            }}
+                                            onClick={dismissVote}
                                             disabled={hasLawyerDismissed}
                                         >
                                             {hasLawyerDismissed ? "DISMISS USED" : "⚖ LAWYER: DISMISS VOTE"}
@@ -625,17 +657,17 @@ export default function Game({
                                 </div>
                             ) : (
                                 showSkipBar && (
-                                    <div style={{ padding: "12px 16px", background: "#0d0020", borderBottom: "1px solid #1a0a2a" }}>
+                                    <div className="cp-skip-tray cp-skip-tray--mobile" style={{ padding: "12px 16px", background: "#0d0020", borderBottom: "1px solid #1a0a2a" }}>
                                         <SkipBar skipVotes={skipVotes} myId={myId} onSkip={requestSkipPhase} />
                                     </div>
                                 )
                             )}
                         </div>
                     )}
-                        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-                            {/* Visual divider for the chat panel to prevent perceived overlap */}
-                            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, #2a1a4a, transparent)", zIndex: 10 }} />
-                            <ChatPanel 
+                    <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+                        {/* Visual divider for the chat panel to prevent perceived overlap */}
+                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, #2a1a4a, transparent)", zIndex: 10 }} />
+                        <ChatPanel
                             roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} players={players} myId={myId}
                             isPanelOpen={true}
                             pubMsgs={pubMsgs} gnMsgs={gnMsgs}
@@ -646,13 +678,13 @@ export default function Game({
                             onTabChange={setActiveChatTab}
                         />
                     </div>
-                    
+
                     {/* Mobile Chat Modal Overlay */}
                     {mobileChatOpen && (
-                        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#07000ffc", display: "flex", flexDirection: "column", animation: "fadeInUp 0.3s ease-out" }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #1a0a2a", background: "#0d0020" }}>
+                        <div className="cp-mobile-chat-modal" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#07000ffc", display: "flex", flexDirection: "column", animation: "fadeInUp 0.3s ease-out" }}>
+                            <div className="cp-mobile-chat-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #1a0a2a", background: "#0d0020" }}>
                                 <span style={{ fontSize: 10, color: "#00f5ff", fontFamily: "Press Start 2P" }}>CREW CHAT</span>
-                                <button 
+                                <button
                                     onClick={() => setMobileChatOpen(false)}
                                     className="btn-topbar"
                                     style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #ff2a2a44", color: "#ff2a2a" }}
@@ -661,7 +693,7 @@ export default function Game({
                                 </button>
                             </div>
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                                <ChatPanel 
+                                <ChatPanel
                                     roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} players={players} myId={myId}
                                     isPanelOpen={true}
                                     pubMsgs={pubMsgs} gnMsgs={gnMsgs}
@@ -679,7 +711,7 @@ export default function Game({
                     <div style={{ display: "flex", flexDirection: "column", flex: 1, width: desktopChat ? "50%" : "100%" }}>{leftColumnContent}</div>
                     {desktopChat && (
                         <div style={{ flex: 1 }}>
-                            <ChatPanel 
+                            <ChatPanel
                                 roomId={roomId} myRole={myRole} isAlive={me?.alive ?? true} phase={phase} socket={socket} players={players} myId={myId}
                                 isPanelOpen={true}
                                 pubMsgs={pubMsgs} gnMsgs={gnMsgs}

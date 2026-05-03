@@ -176,9 +176,12 @@ export default function PlayerCard({
                                             ? "0 0 20px rgba(255, 0, 0, 0.3), inset 0 0 15px rgba(255, 0, 0, 0.2)"
                                             : `0 4px 14px ${color}44`;
 
-    const cardClassName = ["player-card-frame", hasAura ? `has-aura ${auraKey}` : ""]
-        .filter(Boolean)
-        .join(" ");
+    const cardClassName = ["player-card-frame",
+        hasAura ? `has-aura ${auraKey}` : "",
+        isSelected && !isGnosiaTarget ? "cp-card-selected" : "",
+        isGnosiaTarget ? "cp-card-gnosia-target" : "",
+        isDead ? "cp-card-dead" : "",
+    ].filter(Boolean).join(" ");
 
     const avatarClassName = ["avatar-shell", hasAura ? `avatar-aura ${auraKey}` : ""]
         .filter(Boolean)
@@ -267,6 +270,13 @@ export default function PlayerCard({
                     isolation: "isolate",
                     userSelect: "none",
                 }}>
+
+                {/* Cyberpunk HUD micro-details (rendered always, styled via CSS only when theme-cyberpunk active) */}
+                <div className="cp-card-stripe" />
+                <div className="cp-card-tick-tl" />
+                <div className="cp-card-tick-br" />
+                {!compact && <div className="cp-card-signal">SIGNAL</div>}
+                <div className="cp-card-scanline" />
 
                 <div style={{
                     position: "absolute",
@@ -453,8 +463,8 @@ export default function PlayerCard({
                             transition: "all 0.3s",
                             zIndex: 2,
                         }}
-                        className="no-callout"
-                        onContextMenu={e => e.preventDefault()}
+                            className="no-callout cp-avatar-frame"
+                            onContextMenu={e => e.preventDefault()}
                         >
                             {showPortrait ? (
                                 <>
@@ -498,8 +508,8 @@ export default function PlayerCard({
                                     position: "relative",
                                     zIndex: 2,
                                 }}
-                                className="no-callout"
-                                onContextMenu={e => e.preventDefault()}
+                                    className="no-callout"
+                                    onContextMenu={e => e.preventDefault()}
                                 >X</div>
                             )}
 
