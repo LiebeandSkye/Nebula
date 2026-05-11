@@ -6,7 +6,313 @@ import { useSocket, useSocketEvent } from "../hooks/useSocket";
 import { clearPlaySession, getOrCreateSessionToken, savePlaySession } from "../lib/sessionPersistence.js";
 import { PROFILES, AVATAR_COLORS } from "../lib/profiles.js";
 import { getStoredTheme, applyTheme } from "../lib/themeStore.js";
+import {
+    consumeOAuthRedirect,
+    fetchCurrentUser,
+    getStoredAuthSession,
+    getSupabaseConfigStatus,
+    signInWithEmail,
+    signOutAuth,
+    signUpWithEmail,
+    startOAuthSignIn,
+} from "../lib/supabaseAuth.js";
 import EmoteWheel, { getRandomEmotes } from "../components/EmoteWheel.jsx";
+import "../lobby-nebula.css";
+import {
+    Bell,
+    ChevronRight,
+    Home,
+    KeyRound,
+    Lock,
+    Globe,
+    Mail,
+    Menu,
+    Music,
+    Package,
+    Palette,
+    Play,
+    Plus,
+    Rocket,
+    Settings2,
+    ShoppingBag,
+    UserPlus,
+    User,
+    Users,
+    Volume2,
+} from "lucide-react";
+import { FaDiscord, FaYoutube } from "react-icons/fa";
+import { FaXTwitter } from "react-icons/fa6";
+import { LOBBY_CAROUSEL_SLIDES } from "../lib/lobbyCarouselSlides.js";
+
+/** Public asset (see `client/public/Logo.png`). */
+const LOBBY_LOGO_SRC = "/Logo.png";
+
+const CAROUSEL_MS = 3000;
+
+function NebulaCarousel({ slides }) {
+    const list = slides?.length ? slides : [{ src: "", alt: "" }];
+    const [idx, setIdx] = useState(0);
+
+    useEffect(() => {
+        if (list.length <= 1) return;
+        const t = setInterval(() => {
+            setIdx((i) => (i + 1) % list.length);
+        }, CAROUSEL_MS);
+        return () => clearInterval(t);
+    }, [list.length]);
+
+    return (
+        <div className="nebula-carousel-card" aria-label="Featured slides">
+            <div className="nebula-carousel-viewport">
+                {list.map((s, i) => (
+                    <div
+                        key={i}
+                        className={
+                            "nebula-carousel-slide" +
+                            (i === idx ? " nebula-carousel-slide--visible" : "") +
+                            (!s.src ? " nebula-carousel-slide--placeholder" : "")
+                        }
+                        style={s.src ? { backgroundImage: `url(${s.src})` } : undefined}
+                        role="img"
+                        aria-label={s.alt || `Slide ${i + 1}`}
+                    />
+                ))}
+            </div>
+            {list.length > 1 && (
+                <div className="nebula-carousel-dots">
+                    {list.map((_, i) => (
+                        <button
+                            key={i}
+                            type="button"
+                            className={"nebula-carousel-dot" + (i === idx ? " nebula-carousel-dot--on" : "")}
+                            aria-label={`Go to slide ${i + 1}`}
+                            onClick={() => setIdx(i)}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function NebulaMobileHeader({ variant, roomId, connected }) {
+    const isWaiting = variant === "waiting";
+    return (
+        <div className="nebula-mobile-header">
+            <div className="nebula-mobile-header-left">
+                <img src={LOBBY_LOGO_SRC} alt="" className="nebula-mobile-header-logo" width={44} height={44} />
+                <div className="nebula-mobile-header-text">
+                    <div className="nebula-mobile-header-title flex flex-col">PROJECT <span>NEBULA</span></div>
+                    {isWaiting ? (
+                        <div className="nebula-mobile-header-code">{roomId}</div>
+                    ) : (
+                        <div className="nebula-mobile-header-sub">DEEP SPACE SOCIAL DEDUCTION</div>
+                    )}
+                </div>
+            </div>
+            <div className="nebula-mobile-header-actions">
+                {!isWaiting && (
+                    <div className={connected ? "nebula-status-pill" : "nebula-status-pill nebula-status-pill--off"} style={{ margin: 0, padding: "6px 10px", fontSize: 8 }}>
+                        <span className="nebula-status-dot" aria-hidden />
+                        {connected ? "ON" : "…"}
+                    </div>
+                )}
+                <button type="button" className="nebula-icon-btn" aria-label="Notifications"><Bell size={18} strokeWidth={2} /></button>
+                <button type="button" className="nebula-icon-btn" aria-label="Settings"><Settings2 size={18} strokeWidth={2} /></button>
+            </div>
+        </div>
+    );
+}
+
+function NebulaMobileDock({ activeKey, onNav }) {
+    const items = [
+        { key: "home", label: "HOME", Icon: Home },
+        { key: "rooms", label: "ROOMS", Icon: Users },
+        { key: "profile", label: "PROFILE", Icon: User },
+        { key: "store", label: "STORE", Icon: ShoppingBag },
+        { key: "inventory", label: "MORE", Icon: Menu },
+    ];
+    return (
+        <nav className="nebula-mobile-dock" aria-label="Primary">
+            {items.map((entry) => {
+                const DockIcon = entry.Icon;
+                return (
+                    <button
+                        key={entry.key}
+                        type="button"
+                        className={activeKey === entry.key ? "nebula-mobile-dock--active" : ""}
+                        onClick={() => onNav?.(entry.key)}
+                    >
+                        <DockIcon size={22} strokeWidth={2} aria-hidden />
+                        {entry.label}
+                    </button>
+                );
+            })}
+        </nav>
+    );
+}
+
+function NebulaLobbySidebar({ activeKey, onNav }) {
+    return (
+        <aside className="nebula-sidebar">
+            <div className="nebula-logo-wrap">
+                <img src={LOBBY_LOGO_SRC} alt="Project Nebula" className="nebula-logo-img"  />
+            </div>
+            <nav className="nebula-nav" aria-label="Lobby navigation">
+                {[
+                    { key: "home", label: "HOME", Icon: Home },
+                    { key: "rooms", label: "ROOMS", Icon: Users },
+                    { key: "profile", label: "PROFILE", Icon: User },
+                    { key: "inventory", label: "INVENTORY", Icon: Package },
+                    { key: "store", label: "STORE", Icon: ShoppingBag },
+                ].map((entry) => {
+                    const NavIconEl = entry.Icon;
+                    return (
+                    <button
+                        key={entry.key}
+                        type="button"
+                        className={
+                            "nebula-nav-item" + (activeKey === entry.key ? " nebula-nav-item--active" : "")
+                        }
+                        onClick={() => onNav?.(entry.key)}
+                    >
+                        <NavIconEl size={18} strokeWidth={2} aria-hidden />
+                        {entry.label}
+                    </button>
+                    );
+                })}
+            </nav>
+            <NebulaCarousel slides={LOBBY_CAROUSEL_SLIDES} />
+            <div className="nebula-social">
+                <a href="https://discord.com" target="_blank" rel="noreferrer noopener" aria-label="Discord">
+                    <FaDiscord size={16} />
+                </a>
+                <a href="https://x.com" target="_blank" rel="noreferrer noopener" aria-label="X">
+                    <FaXTwitter size={15} />
+                </a>
+                <a href="https://youtube.com" target="_blank" rel="noreferrer noopener" aria-label="YouTube">
+                    <FaYoutube size={16} />
+                </a>
+            </div>
+        </aside>
+    );
+}
+
+const PROTECTED_NAV = new Set(["profile", "store", "inventory"]);
+
+function AuthModal({ open, reason, session, onClose, onAuthed, onSignOut }) {
+    const [mode, setMode] = useState("login");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [message, setMessage] = useState("");
+    const { configured } = getSupabaseConfigStatus();
+
+    if (!open) return null;
+
+    const userEmail = session?.user?.email || session?.user?.user_metadata?.email;
+    const targetLabel = reason === "store"
+        ? "Store"
+        : reason === "inventory"
+            ? "Inventory"
+            : "Profile";
+
+    async function submitAuth(event) {
+        event.preventDefault();
+        if (!configured) {
+            setMessage("Supabase is not configured for this build.");
+            return;
+        }
+        if (!email.trim() || !password) {
+            setMessage("Enter your email and password.");
+            return;
+        }
+        setBusy(true);
+        setMessage("");
+        try {
+            const next = mode === "signup"
+                ? await signUpWithEmail(email.trim(), password)
+                : await signInWithEmail(email.trim(), password);
+            if (next?.needsConfirmation) {
+                setMessage("Check your email to confirm your account, then return here to sign in.");
+                return;
+            }
+            await fetchCurrentUser(next);
+            onAuthed?.(next);
+        } catch (err) {
+            setMessage(err?.message || "Authentication failed.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <div className="nebula-auth-backdrop" role="dialog" aria-modal="true" aria-label="Authentication">
+            <div className="nebula-auth-card">
+                <button type="button" className="nebula-auth-close" onClick={onClose} aria-label="Close">x</button>
+                <div className="nebula-auth-kicker">ACCESS REQUIRED</div>
+                <h2>{session ? "Operator Linked" : `${targetLabel} Access`}</h2>
+                <p>
+                    {session
+                        ? "Your Nebula account is connected. Protected navigation is unlocked."
+                        : "Create an account or sign in to open crew profile, store, and inventory systems."}
+                </p>
+
+                {session ? (
+                    <div className="nebula-auth-signed">
+                        <div>
+                            <span>Signed in as</span>
+                            <strong>{userEmail || "Nebula Operator"}</strong>
+                        </div>
+                        <button type="button" className="nebula-auth-primary" onClick={onClose}>
+                            CONTINUE
+                        </button>
+                        <button type="button" className="nebula-auth-secondary" onClick={onSignOut}>
+                            SIGN OUT
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <div className="nebula-auth-tabs">
+                            <button type="button" className={mode === "login" ? "is-active" : ""} onClick={() => setMode("login")}>LOGIN</button>
+                            <button type="button" className={mode === "signup" ? "is-active" : ""} onClick={() => setMode("signup")}>SIGN UP</button>
+                        </div>
+                        <form className="nebula-auth-form" onSubmit={submitAuth}>
+                            <input
+                                type="email"
+                                placeholder="email@domain.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                autoComplete="email"
+                            />
+                            <input
+                                type="password"
+                                placeholder="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                                minLength={6}
+                            />
+                            {message && <div className="nebula-auth-message">{message}</div>}
+                            <button type="submit" className="nebula-auth-primary" disabled={busy || !configured}>
+                                {busy ? "CONNECTING..." : mode === "signup" ? "CREATE ACCOUNT" : "LOGIN"}
+                            </button>
+                        </form>
+                        <div className="nebula-auth-divider"><span>OR CONTINUE WITH</span></div>
+                        <div className="nebula-auth-oauth">
+                            <button type="button" onClick={() => startOAuthSignIn("google")} disabled={!configured}>
+                                <UserPlus size={16} aria-hidden /> GOOGLE
+                            </button>
+                            <button type="button" onClick={() => startOAuthSignIn("discord")} disabled={!configured}>
+                                <FaDiscord size={16} aria-hidden /> DISCORD
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
 
 function Avatar({ profileId, username, size = 56, color }) {
     const c = color || AVATAR_COLORS[profileId] || "#c8b8ff";
@@ -111,6 +417,52 @@ export default function Lobby({
     const lobbyTimerRef = useRef(null);
     const lobbyAvatarRef = useRef(null);
     const lobbyEmoteTimers = useRef({});
+    const [roomPrivacy, setRoomPrivacy] = useState("public");
+    const [sidebarNav, setSidebarNav] = useState("home");
+    const [authSession, setAuthSession] = useState(() => consumeOAuthRedirect() || getStoredAuthSession());
+    const [authModalNav, setAuthModalNav] = useState(null);
+    const [pendingNav, setPendingNav] = useState(null);
+    const [waitingTab, setWaitingTab] = useState("overview");
+    const profileSectionRef = useRef(null);
+    const heroActionsRef = useRef(null);
+
+    function runNav(key) {
+        setSidebarNav(key);
+        if (key === "profile") {
+            profileSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else if (key === "rooms") {
+            heroActionsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        } else if (key === "home") {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (key === "store" || key === "inventory") {
+            heroActionsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }
+
+    function handleSidebarNav(key) {
+        if (PROTECTED_NAV.has(key) && !authSession) {
+            setPendingNav(key);
+            setAuthModalNav(key);
+            return;
+        }
+        runNav(key);
+    }
+
+    function handleAuthSuccess(nextSession) {
+        setAuthSession(nextSession || getStoredAuthSession());
+        setAuthModalNav(null);
+        if (pendingNav) {
+            runNav(pendingNav);
+            setPendingNav(null);
+        }
+    }
+
+    async function handleSignOut() {
+        await signOutAuth();
+        setAuthSession(null);
+        setAuthModalNav(null);
+        setPendingNav(null);
+    }
 
     function syncSettingsFromState(state) {
         if (!state?.settings) return;
@@ -162,6 +514,19 @@ export default function Lobby({
     });
 
     useEffect(() => {
+        const session = getStoredAuthSession();
+        if (session?.access_token) {
+            fetchCurrentUser(session).then((user) => {
+                setAuthSession((prev) => prev ? { ...prev, user } : prev);
+            }).catch(() => {});
+        }
+
+        const onAuth = (event) => setAuthSession(event.detail || null);
+        window.addEventListener("nebula:auth", onAuth);
+        return () => window.removeEventListener("nebula:auth", onAuth);
+    }, []);
+
+    useEffect(() => {
         if (!resumeFrom?.lobbyState || !resumeFrom.roomId || !resumeFrom.myId) return;
         setRoomId(resumeFrom.roomId);
         setMyId(resumeFrom.myId);
@@ -209,7 +574,7 @@ export default function Lobby({
             username: username.trim(), profileId,
             sessionToken,
             settings: {
-                password: settings.password || null,
+                password: roomPrivacy === "private" ? (settings.password || null) : null,
                 hasEngineer: settings.hasEngineer,
                 hasDoctor: settings.hasDoctor,
                 hasGuardian: settings.hasGuardian,
@@ -231,7 +596,7 @@ export default function Lobby({
             roomId: res.roomId,
             username: username.trim(),
             profileId,
-            password: settings.password || null,
+            password: roomPrivacy === "private" ? (settings.password || null) : null,
         });
         onReady?.(res.roomId, me?.id, profileId, username.trim(), sessionToken);
         setScreen("waiting");
@@ -372,38 +737,90 @@ export default function Lobby({
                 : musicState?.playback?.trackKey === "gnosiaWin"
                     ? "GNOSIA WIN"
                     : "OFF";
+        const displayName = lobbyState?.players.find(p => p.id === myId)?.username || username.trim() || "Operator";
+        const displayProfileId = lobbyState?.players.find(p => p.id === myId)?.profileId || profileId;
         return (
-            <div className="crt star-bg" style={{
-                minHeight: "100vh", display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", padding: 32, gap: 24,
-            }}>
-                {/* Header */}
-                <div className='' style={{ textAlign: "center", flexDirection: "column", display: "flex", alignItems: "center", gap: 4 }}>
-                    <div className="cp-title-flicker cp-flicker-shake" style={{ fontSize: 11, color: "#4a3060", letterSpacing: "0.2em", marginBottom: 12 }}>
-                        PROJECT NEBULA
+            <div className="nebula-lobby">
+                <NebulaLobbySidebar activeKey="rooms" onNav={() => { }} />
+                <div className="nebula-main">
+                    <NebulaMobileHeader variant="waiting" roomId={roomId} connected={connected} />
+                    <div className="nebula-topbar">
+                        <div>
+                            <div className="nebula-brand">
+                                <div className="nebula-brand-title">PROJECT NEBULA</div>
+                                <div className="nebula-brand-sub">DEEP SPACE SOCIAL DEDUCTION</div>
+                            </div>
+                            <div className={connected ? "nebula-status-pill" : "nebula-status-pill nebula-status-pill--off"}>
+                                <span className="nebula-status-dot" aria-hidden />
+                                {connected ? "SERVER ONLINE" : "CONNECTING..."}
+                            </div>
+                        </div>
+                        <div className="nebula-user-card">
+                            {displayProfileId ? (
+                                <img className="nebula-user-avatar" src={`/profiles/${displayProfileId}.jpg`} alt="" />
+                            ) : (
+                                <div
+                                    className="nebula-user-avatar"
+                                    style={{
+                                        display: "grid",
+                                        placeItems: "center",
+                                        fontFamily: "Orbitron, sans-serif",
+                                        fontWeight: 700,
+                                        fontSize: 18,
+                                        color: "#2ee8ff",
+                                    }}
+                                >
+                                    {(displayName[0] || "?").toUpperCase()}
+                                </div>
+                            )}
+                            <div className="nebula-user-meta">
+                                <div className="nebula-user-name">{displayName}</div>
+                                <div className="nebula-user-level">Level 27</div>
+                                <div className="nebula-xp-bar">
+                                    <div className="nebula-xp-fill" style={{ width: "70%" }} />
+                                </div>
+                                <div className="nebula-xp-label">2,450 / 3,500 XP</div>
+                            </div>
+                            <div className="nebula-user-actions">
+                                <button type="button" className="nebula-icon-btn" aria-label="Friends"><Users size={18} strokeWidth={2} /></button>
+                                <button type="button" className="nebula-icon-btn" aria-label="Notifications"><Mail size={18} strokeWidth={2} /></button>
+                                <button type="button" className="nebula-icon-btn" aria-label="Quick settings"><Settings2 size={18} strokeWidth={2} /></button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="glow-cyan cp-room-code cp-flicker-shake" style={{ fontSize: 28, letterSpacing: "0.1em" }}>
-                        {roomId}
+                    <div style={{ textAlign: "center", marginBottom: 18 }}>
+                        <div className="nebula-brand-sub" style={{ marginBottom: 8 }}>ROOM CODE</div>
+                        <div className="nebula-code-display">{roomId}</div>
+                        <div style={{ fontSize: 13, color: "rgba(200,220,255,0.45)", fontWeight: 600 }}>Share this code with your crew</div>
                     </div>
-                    <div className="cp-lobby-instruction" style={{ fontSize: 9, color: "#4a3060", marginTop: 8 }}>
-                        Share this code with your crew
+                    <div className="nebula-room-tabs" role="tablist" aria-label="Room sections">
+                        {[
+                            ["overview", "OVERVIEW"],
+                            ["crew", "CREW"],
+                            ["missions", "MISSIONS"],
+                            ["settings", "SETTINGS"],
+                        ].map(([key, label]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                className={waitingTab === key ? "is-active" : ""}
+                                onClick={() => setWaitingTab(key)}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
-                </div>
-
-                <div style={{
-                    width: "100%", maxWidth: 820, display: "flex", gap: 20,
-                    flexWrap: "wrap"
-                }}>
+                    <div className={`nebula-waiting-grid nebula-waiting-grid--tab-${waitingTab}`} style={{ width: "100%", maxWidth: 1540 }}>
 
                     {/* Player list */}
-                    <div className="panel-glow cp-bg-mood cp-bg-davidxlucy" style={{ flex: "1 1 340px", minWidth: 280 }}>
+                    <div className="nebula-panel nebula-waiting-panel" style={{ minWidth: 0 }}>
                         <div style={{
-                            padding: "16px 20px", borderBottom: "1px solid #1a0a2a",
+                            padding: "16px 20px", borderBottom: "1px solid rgba(46,232,255,0.15)",
                             display: "flex", justifyContent: "space-between", alignItems: "center"
                         }}>
-                            <span style={{ fontSize: 9, color: "#4a3060", letterSpacing: "0.15em" }}>CREW MANIFEST</span>
-                            <span style={{ fontSize: 10, color: "#e0d4ff" }}>
-                                {playerCount}<span style={{ color: "#4a3060" }}>/12</span>
+                            <span style={{ fontFamily: "Orbitron, sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", color: "rgba(200,220,255,0.45)" }}>CREW MANIFEST</span>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: "#e8f4ff" }}>
+                                {playerCount}<span style={{ color: "rgba(200,220,255,0.35)" }}>/12</span>
                             </span>
                         </div>
                         <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -482,13 +899,14 @@ export default function Lobby({
 
                     {/* Host settings + start */}
                     <div style={{
-                        flex: "1 1 320px", minWidth: 260, display: "flex",
+                        minWidth: 0, display: "flex",
                         flexDirection: "column", gap: 16
                     }}>
                         {amHost ? (
-                            <div className="panel-glow cp-bg-mood cp-bg-davidxlucy" style={{ padding: 20 }}>
+                            <div className="nebula-panel nebula-waiting-panel" style={{ padding: 20 }}>
                                 <div style={{
-                                    fontSize: 9, color: "#4a3060", letterSpacing: "0.15em",
+                                    fontFamily: "Orbitron, sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em",
+                                    color: "rgba(200,220,255,0.45)",
                                     marginBottom: 16
                                 }}>
                                     MISSION SETTINGS
@@ -576,8 +994,8 @@ export default function Lobby({
                                 )}
                             </div>
                         ) : (
-                            <div className="panel" style={{ padding: 20 }}>
-                                <div style={{ fontSize: 9, color: "#4a3060", marginBottom: 16 }}>
+                            <div className="nebula-panel nebula-waiting-panel" style={{ padding: 20 }}>
+                                <div style={{ fontFamily: "Orbitron, sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", color: "rgba(200,220,255,0.45)", marginBottom: 16 }}>
                                     ACTIVE SETTINGS
                                 </div>
                                 {[
@@ -640,8 +1058,8 @@ export default function Lobby({
                                         "▶  LAUNCH MISSION"}
                             </button>
                         ) : (
-                            <div className="panel" style={{ padding: 20, textAlign: "center" }}>
-                                <div style={{ fontSize: 9, color: "#4a3060" }}
+                            <div className="nebula-panel nebula-waiting-panel" style={{ padding: 20, textAlign: "center" }}>
+                                <div style={{ fontSize: 13, color: "rgba(200,220,255,0.45)", fontWeight: 600 }}
                                     className="anim-fadeIn">
                                     AWAITING HOST...
                                 </div>
@@ -674,7 +1092,81 @@ export default function Lobby({
                             LEAVE ROOM
                         </button>
                     </div>
+                    <aside className="nebula-room-aside">
+                        <section className="nebula-panel nebula-waiting-panel nebula-music-card">
+                            <div className="nebula-side-title">
+                                <Music size={20} aria-hidden />
+                                <span>SHARED MUSIC CONTROL</span>
+                            </div>
+                            <div className="nebula-music-now">
+                                <span>NOW PLAYING</span>
+                                <strong>{nowPlayingLabel}</strong>
+                            </div>
+                            {amHost && (
+                                <div className="nebula-music-options">
+                                    <label>
+                                        <div>
+                                            <strong>LOBBY MUSIC</strong>
+                                            <span>Synced room track while everyone waits in lobby.</span>
+                                        </div>
+                                        <input type="checkbox" className="toggle" checked={settings.lobbyMusicEnabled}
+                                            onChange={e => changeSetting("lobbyMusicEnabled", e.target.checked)} />
+                                    </label>
+                                    <label>
+                                        <div>
+                                            <strong>END GAME MUSIC</strong>
+                                            <span>Human or Gnosia victory music after the match.</span>
+                                        </div>
+                                        <input type="checkbox" className="toggle" checked={settings.endGameMusicEnabled}
+                                            onChange={e => changeSetting("endGameMusicEnabled", e.target.checked)} />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        className="nebula-auth-primary nebula-music-play"
+                                        onClick={playSharedMusic}
+                                        disabled={!settings.lobbyMusicEnabled}
+                                    >
+                                        <Play size={16} aria-hidden /> PLAY MUSIC
+                                    </button>
+                                </div>
+                            )}
+                            <div className="nebula-volume-box">
+                                <div>
+                                    <strong>YOUR VOLUME</strong>
+                                    <span>Applies only to your device.</span>
+                                </div>
+                                <button
+                                    className="btn-topbar"
+                                    onClick={() => setMusicMuted(!musicMuted)}
+                                    style={{ borderColor: "#9b63ff66", color: musicMuted ? "#8a7aa0" : "#f3e9ff" }}>
+                                    {musicMuted ? "UNMUTE" : "MUTE"}
+                                </button>
+                                <div className="nebula-range-row">
+                                    <Volume2 size={15} aria-hidden />
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={Math.round(musicVolume * 100)}
+                                        onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
+                                    />
+                                </div>
+                            </div>
+                        </section>
+                        <section className="nebula-panel nebula-waiting-panel nebula-room-info">
+                            <h3>ROOM INFO</h3>
+                            <dl>
+                                <div><dt>CREW</dt><dd>{playerCount} / 12</dd></div>
+                                <div><dt>GAME MODE</dt><dd>Standard</dd></div>
+                                <div><dt>VOICE CHAT</dt><dd>Enabled <span className="nebula-status-dot" /></dd></div>
+                                <div><dt>REGION</dt><dd>Automatic</dd></div>
+                            </dl>
+                        </section>
+                    </aside>
                 </div>
+                    <p className="nebula-footer-tip">
+                        TIP: Tip is to tip me pls :)!
+                    </p>
                 {amHost && (
                     <div style={{
                         position: "fixed",
@@ -688,7 +1180,7 @@ export default function Lobby({
                         boxShadow: "0 0 0 1px rgba(0,245,255,0.08), 0 0 28px rgba(0,245,255,0.12)",
                         padding: 18,
                         zIndex: 10,
-                    }}>
+                    }} className="nebula-floating-music">
                         <div
                             onPointerDown={startMusicPanelDrag}
                             style={{
@@ -797,6 +1289,7 @@ export default function Lobby({
                 )}
                 {!amHost && (
                     <div
+                        className="nebula-floating-music"
                         onPointerDown={startVolumePanelDrag}
                         style={{
                             position: "fixed",
@@ -865,210 +1358,330 @@ export default function Lobby({
                         onClose={() => setLobbyEmoteWheel(null)}
                     />
                 )}
+                <AuthModal
+                    open={!!authModalNav}
+                    reason={authModalNav}
+                    session={authSession}
+                    onClose={() => { setAuthModalNav(null); setPendingNav(null); }}
+                    onAuthed={handleAuthSuccess}
+                    onSignOut={handleSignOut}
+                />
+                </div>
+                <NebulaMobileDock activeKey="rooms" onNav={handleSidebarNav} />
             </div>
         );
     }
 
     // ── SETUP SCREEN ──────────────────────────────────────────────────
+    const setupDisplayName = username.trim() || "Operator";
     return (
-        <div className="crt star-bg" style={{
-            minHeight: "100vh", display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center", padding: "32px 20px", gap: 32,
-        }}>
-            {/* Title */}
-            <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: "#4a3060", letterSpacing: "0.25em", marginBottom: 14 }}>
-                    DEEP SPACE SOCIAL DEDUCTION
-                </div>
-                <h1 className="glow-cyan cp-title-flicker cp-flicker-shake" style={{ fontSize: 32, letterSpacing: "0.08em" }}>
-                    PROJECT<br />NEBULA
-                </h1>
-                <div style={{
-                    marginTop: 14, display: "flex", alignItems: "center",
-                    justifyContent: "center", gap: 10
-                }}>
-                    <div style={{
-                        width: 8, height: 8, borderRadius: "50%",
-                        background: connected ? "#00f5ff" : "#ff2a2a",
-                        boxShadow: connected ? "0 0 8px #00f5ff" : "0 0 8px #ff2a2a",
-                    }} />
-                    <span style={{ fontSize: 8, color: "#4a3060" }}>
-                        {connected ? "SERVER ONLINE" : "CONNECTING..."}
-                    </span>
-                </div>
-            </div>
-
-            <div style={{ width: "100%", maxWidth: 900 }}>
-                {/* Mode tabs */}
-                <div style={{ display: "flex", marginBottom: 20 }}>
-                    {["create", "join"].map(m => (
-                        <button key={m} onClick={() => { setMode(m); setError(""); }}
-                            style={{
-                                flex: 1, padding: "14px 0", fontSize: 10,
-                                border: "1px solid",
-                                borderColor: mode === m ? "#00f5ff" : "#2a1a4a",
-                                background: mode === m ? "#00f5ff15" : "transparent",
-                                color: mode === m ? "#00f5ff" : "#4a3060",
-                                cursor: "pointer",
-                                fontFamily: "Press Start 2P",
-                                transition: "all 0.15s",
-                            }}>
-                            {m === "create" ? "⊕  CREATE ROOM" : "→  JOIN ROOM"}
-                        </button>
-                    ))}
-                </div>
-
-                <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-
-                    {/* Left: form */}
-                    <div className="panel-glow cp-bg-mood cp-bg-cyber" style={{
-                        flex: "1 1 340px", padding: 28,
-                        display: "flex", flexDirection: "column", gap: 20
-                    }}>
-                        {/* Callsign */}
-                        <div>
-                            <label style={{
-                                display: "block", fontSize: 9, color: "#4a3060",
-                                letterSpacing: "0.15em", marginBottom: 10
-                            }}>
-                                CALLSIGN
-                            </label>
-                            <input className="input" placeholder="enter username..."
-                                value={username} onChange={e => setUsername(e.target.value)} maxLength={20} />
+        <div className="nebula-lobby">
+            <NebulaLobbySidebar activeKey={sidebarNav} onNav={handleSidebarNav} />
+            <div className="nebula-main">
+                <NebulaMobileHeader variant="setup" connected={connected} />
+                <div className="nebula-topbar">
+                    <div className="flex flex-row gap-2 relative w-full">
+                        <div className="nebula-brand">
+                            <div className="nebula-brand-title flex flex-col">PROJECT <span className="NEBULA">NEBULA</span></div>
+                            <div className="nebula-brand-sub">DEEP SPACE SOCIAL DEDUCTION</div>
                         </div>
+                        <div className={connected ? "nebula-status-pill" : "nebula-status-pill nebula-status-pill--off"}>
+                            <span className="nebula-status-dot" aria-hidden />
+                            {connected ? "SERVER ONLINE" : "CONNECTING..."}
+                        </div>
+                    </div>
+                    <div className="nebula-user-card">
+                        {profileId ? (
+                            <img className="nebula-user-avatar" src={`/profiles/${profileId}.jpg`} alt="" />
+                        ) : (
+                            <div
+                                className="nebula-user-avatar"
+                                style={{
+                                    display: "grid",
+                                    placeItems: "center",
+                                    fontFamily: "Orbitron, sans-serif",
+                                    fontWeight: 700,
+                                    fontSize: 18,
+                                    color: "#2ee8ff",
+                                }}
+                            >
+                                {(setupDisplayName[0] || "?").toUpperCase()}
+                            </div>
+                        )}
+                        <div className="nebula-user-meta">
+                            <div className="nebula-user-name">{setupDisplayName}</div>
+                            <div className="nebula-user-level">Level 27</div>
+                            <div className="nebula-xp-bar">
+                                <div className="nebula-xp-fill" style={{ width: "70%" }} />
+                            </div>
+                            <div className="nebula-xp-label">2,450 / 3,500 XP</div>
+                        </div>
+                        <div className="nebula-user-actions">
+                            <button type="button" className="nebula-icon-btn" aria-label="Friends"><Users size={18} strokeWidth={2} /></button>
+                            <button type="button" className="nebula-icon-btn" aria-label="Notifications"><Mail size={18} strokeWidth={2} /></button>
+                            <button type="button" className="nebula-icon-btn" aria-label="Quick settings"><Settings2 size={18} strokeWidth={2} /></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="nebula-hero-row" ref={heroActionsRef}>
+                    <button
+                        type="button"
+                        className={"nebula-hero-btn nebula-hero-btn--cyan" + (mode === "create" ? " nebula-hero-btn--on" : "")}
+                        onClick={() => { setMode("create"); setError(""); setSidebarNav("rooms"); }}
+                    >
+                        <div className="nebula-hero-icon-wrap" aria-hidden>
+                            <Plus size={26} strokeWidth={2.5} />
+                        </div>
+                        <div className="nebula-hero-text">
+                            <div className="nebula-hero-title">CREATE ROOM</div>
+                            <div className="nebula-hero-sub">Start a new game.</div>
+                        </div>
+                        <ChevronRight className="nebula-hero-chevron" size={28} aria-hidden />
+                    </button>
+                    <button
+                        type="button"
+                        className={"nebula-hero-btn nebula-hero-btn--purple" + (mode === "join" ? " nebula-hero-btn--on" : "")}
+                        onClick={() => { setMode("join"); setError(""); setSidebarNav("rooms"); }}
+                    >
+                        <div className="nebula-hero-icon-wrap" aria-hidden>
+                            <Users size={26} strokeWidth={2.5} />
+                        </div>
+                        <div className="nebula-hero-text">
+                            <div className="nebula-hero-title">JOIN ROOM</div>
+                            <div className="nebula-hero-sub">Join with a code.</div>
+                        </div>
+                        <ChevronRight className="nebula-hero-chevron" size={28} aria-hidden />
+                    </button>
+                </div>
+
+                <section className="nebula-mobile-quick">
+                    <div className="nebula-mobile-section-head">
+                        <span><Users size={17} aria-hidden /> QUICK PROFILE</span>
+                        <button type="button" onClick={() => profileSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                            VIEW ALL
+                        </button>
+                    </div>
+                    <div className="nebula-mobile-profile-strip">
+                        {PROFILES.slice(0, 8).map((p) => {
+                            const selected = profileId === p.id;
+                            const color = AVATAR_COLORS[p.id] || "#c8b8ff";
+                            return (
+                                <button
+                                    key={p.id}
+                                    type="button"
+                                    className={selected ? "is-selected" : ""}
+                                    onClick={() => setProfileId(p.id)}
+                                    style={{ "--profile-color": color }}
+                                >
+                                    <Avatar profileId={p.id} username={p.name} size={48} color={color} />
+                                    <span>{p.name}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </section>
+
+                <section className="nebula-mobile-preset">
+                    <div>
+                        <Palette size={24} aria-hidden />
+                        <span>
+                            GAME SETTINGS PRESET
+                            <strong>{currentTheme === "cyberpunk" ? "CYBERPUNK" : "GALACTIC NEON"}</strong>
+                        </span>
+                    </div>
+                    <ChevronRight size={24} aria-hidden />
+                </section>
+
+                <div className="nebula-panels">
+                    <section className="nebula-panel nebula-panel--accent-cyan">
+                        <h2 className="nebula-panel-title">
+                            {mode === "create" ? "CREATE YOUR ROOM" : "JOIN A ROOM"}
+                        </h2>
+
+                        <div>
+                            <label className="nebula-field-label">USERNAME</label>
+                            <div className="nebula-input-wrap">
+                                <User size={20} strokeWidth={2} aria-hidden />
+                                <input
+                                    className="nebula-input"
+                                    placeholder="Enter callsign..."
+                                    value={username}
+                                    onChange={e => setUsername(e.target.value)}
+                                    maxLength={20}
+                                    autoComplete="username"
+                                />
+                            </div>
+                        </div>
+
+                        {mode === "create" && (
+                            <div>
+                                <label className="nebula-field-label">ROOM PASSWORD (OPTIONAL)</label>
+                                <div className="nebula-input-wrap">
+                                    <Lock size={20} strokeWidth={2} aria-hidden />
+                                    <input
+                                        className="nebula-input"
+                                        type="password"
+                                        placeholder="Leave blank if none"
+                                        value={settings.password}
+                                        onChange={e => setSettings(s => ({ ...s, password: e.target.value }))}
+                                        autoComplete="new-password"
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         {mode === "join" && (
                             <>
                                 <div>
-                                    <label className="cp-room-code cp-flicker-shake" style={{
-                                        display: "block", fontSize: 9, color: "#4a3060",
-                                        letterSpacing: "0.15em", marginBottom: 10
-                                    }}>
-                                        ROOM CODE
-                                    </label>
-                                    <input className="input" style={{ textTransform: "uppercase" }}
-                                        placeholder="NEB-XXXX"
-                                        value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())}
-                                        maxLength={8} />
+                                    <label className="nebula-field-label">ROOM CODE</label>
+                                    <div className="nebula-input-wrap">
+                                        <KeyRound size={20} strokeWidth={2} aria-hidden />
+                                        <input
+                                            className="nebula-input"
+                                            style={{ textTransform: "uppercase" }}
+                                            placeholder="ABCD1234"
+                                            value={joinCode}
+                                            onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                                            maxLength={8}
+                                            autoComplete="off"
+                                        />
+                                    </div>
                                 </div>
                                 <div>
-                                    <label style={{
-                                        display: "block", fontSize: 9, color: "#4a3060",
-                                        letterSpacing: "0.15em", marginBottom: 10
-                                    }}>
-                                        PASSWORD (IF REQUIRED)
-                                    </label>
-                                    <input className="input" type="password" placeholder="leave blank if none"
-                                        value={joinPass} onChange={e => setJoinPass(e.target.value)} />
+                                    <label className="nebula-field-label">ROOM PASSWORD</label>
+                                    <div className="nebula-input-wrap">
+                                        <Lock size={20} strokeWidth={2} aria-hidden />
+                                        <input
+                                            className="nebula-input"
+                                            type="password"
+                                            placeholder="If required"
+                                            value={joinPass}
+                                            onChange={e => setJoinPass(e.target.value)}
+                                            autoComplete="off"
+                                        />
+                                    </div>
                                 </div>
                             </>
                         )}
 
                         {mode === "create" && (
-                            <div>
-                                <label style={{
-                                    display: "block", fontSize: 9, color: "#4a3060",
-                                    letterSpacing: "0.15em", marginBottom: 10
-                                }}>
-                                    ROOM PASSWORD (OPTIONAL)
-                                </label>
-                                <input className="input" type="password" placeholder="leave blank for public"
-                                    value={settings.password}
-                                    onChange={e => setSettings(s => ({ ...s, password: e.target.value }))} />
-                            </div>
+                            <>
+                                <div className="nebula-privacy-row">
+                                    <button
+                                        type="button"
+                                        className={"nebula-privacy-btn" + (roomPrivacy === "public" ? " nebula-privacy-btn--on" : "")}
+                                        onClick={() => { setRoomPrivacy("public"); }}
+                                    >
+                                        <Globe size={18} strokeWidth={2} />
+                                        PUBLIC
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={"nebula-privacy-btn" + (roomPrivacy === "private" ? " nebula-privacy-btn--on" : "")}
+                                        onClick={() => setRoomPrivacy("private")}
+                                    >
+                                        <Lock size={18} strokeWidth={2} />
+                                        PRIVATE
+                                    </button>
+                                </div>
+                            </>
                         )}
 
                         {error && (
-                            <div style={{
-                                fontSize: 9, color: "#ff2a2a", padding: "10px 14px",
-                                border: "1px solid #ff2a2a33", background: "#1a000822"
-                            }}>
-                                ⚠ {error}
+                            <div className="nebula-error" role="alert">
+                                {error}
                             </div>
                         )}
 
-                        <button className="btn btn-lg" style={{ width: "100%", marginTop: 4 }}
-                            onClick={mode === "create" ? handleCreate : handleJoin}
-                            disabled={loading || !connected}>
-                            {loading ? "TRANSMITTING..." :
-                                mode === "create" ? "LAUNCH ROOM" : "BOARD VESSEL"}
-                        </button>
-                    </div>
+                        {mode === "create" ? (
+                            <button
+                                type="button"
+                                className="nebula-launch-btn"
+                                onClick={handleCreate}
+                                disabled={loading || !connected}
+                            >
+                                <Rocket size={22} strokeWidth={2} />
+                                {loading ? "TRANSMITTING..." : "LAUNCH ROOM"}
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                className="nebula-launch-btn nebula-launch-btn--purple"
+                                onClick={handleJoin}
+                                disabled={loading || !connected}
+                            >
+                                <Users size={22} strokeWidth={2} />
+                                {loading ? "TRANSMITTING..." : "JOIN ROOM"}
+                            </button>
+                        )}
+                    </section>
 
-                    {/* Right: profile picker + theme */}
-                    <div style={{ flex: "1 1 380px", display: "flex", flexDirection: "column", gap: 12 }}>
-                        {/* Theme selector */}
+                    <section className="nebula-panel nebula-panel--accent-purple" ref={profileSectionRef}>
+                        <h2 className="nebula-panel-title nebula-panel-title--purple">GAME SETTINGS</h2>
                         <div>
-                            <div style={{ fontSize: 9, color: "#4a3060", letterSpacing: "0.15em", marginBottom: 8 }}>
+                            <label className="nebula-field-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <Palette size={16} strokeWidth={2} aria-hidden />
                                 VISUAL THEME
-                            </div>
+                            </label>
                             <select
-                                className="cp-theme-select"
+                                className="nebula-select"
                                 value={currentTheme}
                                 onChange={e => {
                                     const t = e.target.value;
                                     setCurrentTheme(t);
                                     applyTheme(t);
                                 }}
-                                style={{
-                                    fontFamily: "Press Start 2P, monospace",
-                                    fontSize: 9, padding: "10px 14px",
-                                    background: "#0a0016",
-                                    border: "1px solid #2a1a4a",
-                                    color: "#e0d4ff",
-                                    cursor: "pointer",
-                                    outline: "none",
-                                    width: "100%",
-                                }}>
-                                <option value="standard">▫ STANDARD</option>
-                                <option value="cyberpunk">◈ CYBERPUNK — EDGERUNNERS</option>
+                            >
+                                <option value="standard">GALACTIC NEON</option>
+                                <option value="cyberpunk">CYBERPUNK — EDGERUNNERS</option>
                             </select>
                         </div>
-                        <div style={{ fontSize: 9, color: "#4a3060", letterSpacing: "0.15em" }}>
-                            SELECT PROFILE
+                        <div>
+                            <label className="nebula-field-label">SELECT PROFILE</label>
+                            <div className="nebula-profile-grid">
+                                {PROFILES.map(p => {
+                                    const color = AVATAR_COLORS[p.id] || "#c8b8ff";
+                                    const selected = profileId === p.id;
+                                    const taken = takenProfiles.includes(p.id) && !selected;
+                                    return (
+                                        <button
+                                            key={p.id}
+                                            type="button"
+                                            className={"nebula-profile-cell" + (selected ? " nebula-profile-cell--selected" : "")}
+                                            style={{
+                                                borderColor: selected ? color : taken ? "rgba(46,232,255,0.1)" : `${color}66`,
+                                                boxShadow: selected ? `0 0 16px ${color}33` : undefined,
+                                            }}
+                                            onClick={() => !taken && setProfileId(p.id)}
+                                            disabled={taken}
+                                        >
+                                            <Avatar profileId={p.id} username={p.name} size={52} color={color} />
+                                            <span className="nebula-profile-name">{p.name}</span>
+                                            {taken && (
+                                                <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(200,220,255,0.35)" }}>TAKEN</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
-                        <div style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
-                            gap: 10, maxHeight: 460, overflowY: "auto", paddingRight: 4,
-                        }}>
-                            {PROFILES.map(p => {
-                                const color = AVATAR_COLORS[p.id] || "#c8b8ff";
-                                const selected = profileId === p.id;
-                                const taken = takenProfiles.includes(p.id) && !selected;
-                                return (
-                                    <button key={p.id}
-                                        className={`cp-profile-btn ${selected ? "cp-profile-selected" : ""}`}
-                                        onClick={() => !taken && setProfileId(p.id)}
-                                        disabled={taken}
-                                        style={{
-                                            display: "flex", flexDirection: "column", alignItems: "center",
-                                            gap: 10, padding: 14,
-                                            border: `2px solid ${selected ? color : taken ? "#1a0a2a" : "#2a1a4a"}`,
-                                            background: selected ? color + "12" : "transparent",
-                                            boxShadow: selected ? `0 0 20px ${color}44` : "none",
-                                            cursor: taken ? "not-allowed" : "pointer",
-                                            opacity: taken ? 0.3 : 1,
-                                            transition: "all 0.15s",
-                                            fontFamily: "Press Start 2P",
-                                        }}>
-                                        <Avatar profileId={p.id} username={p.name} size={64} color={color} />
-                                        <span style={{
-                                            fontSize: 8, color: selected ? color : "#8a7aa0",
-                                            textAlign: "center", lineHeight: 1.5
-                                        }}>
-                                            {p.name}
-                                        </span>
-                                        {taken && (
-                                            <span style={{ fontSize: 7, color: "#2a1a3a" }}>TAKEN</span>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    </section>
                 </div>
+
+                <p className="nebula-footer-tip">
+                    TIP: Tip is to tip me pls :)
+                </p>
             </div>
+            <AuthModal
+                open={!!authModalNav}
+                reason={authModalNav}
+                session={authSession}
+                onClose={() => { setAuthModalNav(null); setPendingNav(null); }}
+                onAuthed={handleAuthSuccess}
+                onSignOut={handleSignOut}
+            />
+            <NebulaMobileDock activeKey={sidebarNav} onNav={handleSidebarNav} />
         </div>
     );
 }
